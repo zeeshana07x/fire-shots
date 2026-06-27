@@ -326,10 +326,11 @@ export default function CanvasPreview({ screenshot, palette, className }: Canvas
   }, [drawCanvas]);
 
   // Expose canvas for download
-  (canvasRef as React.MutableRefObject<HTMLCanvasElement & { exportCanvas?: () => HTMLCanvasElement | null }>).current &&
+  if (canvasRef.current) {
     Object.assign(canvasRef.current, {
       exportCanvas: () => canvasRef.current,
     });
+  }
 
   return (
     <canvas
