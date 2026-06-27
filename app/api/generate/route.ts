@@ -8,6 +8,8 @@ export const maxDuration = 60;
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
+  timeout: 120000, // 120 seconds timeout to allow large image uploads
+  maxRetries: 2,
 });
 
 export async function POST(req: NextRequest) {
@@ -104,18 +106,22 @@ export async function POST(req: NextRequest) {
         max_tokens: 500,
       });
 
-      const dallePrompt = gptResponse.choices[0].message.content || 'A 3D mobile app store mockup...';
+      const imagePrompt = gptResponse.choices[0].message.content || 'A 3D mobile app store mockup...';
 
       // Step 2: Call GPT Image 2
-      const dalleResponse = await openai.images.generate({
+      const imageResponse = await openai.images.generate({
         model: "gpt-image-2",
-        prompt: dallePrompt,
+        prompt: imagePrompt,
         n: 1,
-        size: "1024x1792", // DALL-E 3 supports vertical format
+        size: "1024x1792", // GPT Image 2 supports vertical format
         response_format: "b64_json"
       });
 
-      const b64 = dalleResponse.data[0].b64_json;
+      if (!imageResponse.data || imageResponse.data.length === 0) {
+        throw new Error("OpenAI returned an empty image response.");
+      }
+
+      const b64 = imageResponse.data[0].b64_json;
       const generatedUrl = `data:image/png;base64,${b64}`;
 
       generatedScreenshots.push({
