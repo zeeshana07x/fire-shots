@@ -137,14 +137,114 @@ export default function StudioPage() {
     }
   };
 
+  const updateScreenshotText = (field: 'headline' | 'supporting', value: string) => {
+    setScreenshots(prev => prev.map((s, i) => i === selectedIndex ? { ...s, [field]: value } : s));
+  };
+
+  const generateCanvasBlob = async (screenshot: ScreenshotItem): Promise<Blob> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const canvas = document.createElement('canvas');
+        const width = 1080;
+        const height = 1920; // 9:16 aspect ratio
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('No 2D context');
+        const scale = width / 400; // Relative to the 400px max-width container
+
+        // 1. Draw Background
+        const bgImg = new window.Image();
+        bgImg.crossOrigin = 'anonymous';
+        bgImg.src = screenshot.storage_path!;
+        await new Promise((r, err) => { bgImg.onload = r; bgImg.onerror = err; });
+        
+        const bgScale = Math.max(width / bgImg.width, height / bgImg.height);
+        const x = (width / 2) - (bgImg.width / 2) * bgScale;
+        const y = (height / 2) - (bgImg.height / 2) * bgScale;
+        ctx.drawImage(bgImg, x, y, bgImg.width * bgScale, bgImg.height * bgScale);
+
+        // 2. Draw Text (Headline & Supporting)
+        const textY = 120 * scale;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        
+        const headline = screenshot.headline || '';
+        if (headline) {
+          ctx.font = `bold ${36 * scale}px sans-serif`;
+          ctx.shadowColor = 'rgba(0,0,0,0.3)';
+          ctx.shadowBlur = 10;
+          ctx.fillText(headline, width / 2, textY);
+        }
+
+        const supporting = screenshot.supporting || '';
+        if (supporting) {
+          ctx.font = `500 ${18 * scale}px sans-serif`;
+          ctx.shadowBlur = 8;
+          ctx.fillText(supporting, width / 2, textY + (32 * scale));
+        }
+        ctx.shadowColor = 'transparent';
+
+        // 3. Draw Flat Phone Frame
+        const frameW = width * 0.82;
+        const frameH = frameW * (19.5 / 9);
+        const frameX = (width - frameW) / 2;
+        // Position phone lower to make room for text
+        const frameY = height - frameH + (40 * scale); // crop slightly at the bottom
+        
+        // Flat white border, no massive shadows
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(frameX, frameY, frameW, frameH, 40 * scale); 
+        ctx.fill();
+
+        // 4. Draw Screen (User UI)
+        const uiImg = new window.Image();
+        uiImg.crossOrigin = 'anonymous';
+        uiImg.src = screenshot.dataUrl!;
+        await new Promise((r, err) => { uiImg.onload = r; uiImg.onerror = err; });
+
+        const padding = 12 * scale;
+        const screenX = frameX + padding;
+        const screenY = frameY + padding;
+        const screenW = frameW - padding * 2;
+        const screenH = frameH - padding * 2;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(screenX, screenY, screenW, screenH, 32 * scale);
+        ctx.clip();
+        ctx.drawImage(uiImg, screenX, screenY, screenW, screenH);
+        ctx.restore();
+
+        // 5. Minimal Notch (Flat style)
+        const notchW = frameW * 0.35;
+        const notchH = 24 * scale;
+        const notchX = (width - notchW) / 2;
+        const notchY = screenY;
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(notchX, notchY - (10 * scale), notchW, notchH + (10 * scale), 16 * scale);
+        ctx.fill();
+
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Canvas to blob failed'));
+        }, 'image/png');
+      } catch(e) {
+        reject(e);
+      }
+    });
+  };
+
   const handleDownloadSingle = async () => {
     setDownloading(true);
     try {
       const current = screenshots[selectedIndex];
       if (!current.storage_path) return;
       
-      const res = await fetch(current.storage_path);
-      const blob = await res.blob();
+      const blob = await generateCanvasBlob(current);
       const url = URL.createObjectURL(blob);
       
       const a = document.createElement('a');
@@ -167,8 +267,7 @@ export default function StudioPage() {
       
       for (const s of screenshots) {
         if (s.storage_path) {
-          const res = await fetch(s.storage_path);
-          const blob = await res.blob();
+          const blob = await generateCanvasBlob(s);
           zip.file(`mockup-${s.position + 1}.png`, blob);
         }
       }
@@ -409,26 +508,55 @@ export default function StudioPage() {
               })}
             </div>
 
-            {/* COLUMN 2: CENTER PREVIEW */}
+            {/* COLUMN 2: CENTER PREVIEW & EDITOR */}
             <div
               style={{
                 flex: 1,
                 display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
+                alignItems: 'flex-start',
                 justifyContent: 'center',
                 padding: '32px',
                 background: 'var(--bg-base)',
                 overflowY: 'auto',
+                gap: '40px'
               }}
             >
+              {/* Canvas Preview Area */}
               {screenshots[selectedIndex]?.storage_path ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', width: '100%', maxWidth: '400px' }}>
-                  <img 
-                    src={screenshots[selectedIndex].storage_path!} 
-                    alt="Final Mockup" 
-                    style={{ width: '100%', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }} 
-                  />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%', maxWidth: '400px' }}>
+                  <div id={`mockup-composite-${selectedIndex}`} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', aspectRatio: '9/16', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}>
+                    {/* Background Layer (OpenAI Generated) */}
+                    <img 
+                      src={screenshots[selectedIndex].storage_path!} 
+                      alt="Background" 
+                      crossOrigin="anonymous"
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} 
+                    />
+                    
+                    {/* Text Layer */}
+                    <div style={{ position: 'relative', zIndex: 20, textAlign: 'center', marginTop: '12%', padding: '0 20px', textShadow: '0px 2px 10px rgba(0,0,0,0.3)' }}>
+                      {screenshots[selectedIndex].headline && (
+                        <h2 style={{ color: '#fff', fontSize: '36px', fontWeight: 700, lineHeight: 1.1, margin: '0 0 8px 0', fontFamily: 'sans-serif' }}>
+                          {screenshots[selectedIndex].headline}
+                        </h2>
+                      )}
+                      {screenshots[selectedIndex].supporting && (
+                        <p style={{ color: '#fff', fontSize: '18px', fontWeight: 500, margin: 0, fontFamily: 'sans-serif' }}>
+                          {screenshots[selectedIndex].supporting}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Phone Frame Layer (Flat Design, Larger) */}
+                    <div style={{ position: 'relative', width: '82%', aspectRatio: '9/19.5', background: '#ffffff', borderRadius: '32px', padding: '12px', marginTop: 'auto', marginBottom: '-10%', zIndex: 10 }}>
+                       {/* Screen */}
+                       <div style={{ width: '100%', height: '100%', borderRadius: '22px', overflow: 'hidden', background: '#fff', position: 'relative' }}>
+                         <img src={screenshots[selectedIndex].dataUrl!} alt="UI" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                       </div>
+                       {/* Flat Notch */}
+                       <div style={{ position: 'absolute', top: '12px', left: '50%', transform: 'translateX(-50%)', width: '35%', height: '20px', background: '#ffffff', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }} />
+                    </div>
+                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>
                       Generated by OpenAI DALL-E 3
@@ -436,7 +564,7 @@ export default function StudioPage() {
                   </div>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '24px' }}>
                   <svg className="animate-spin" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="12" y1="2" x2="12" y2="6"></line>
                     <line x1="12" y1="18" x2="12" y2="22"></line>
@@ -452,6 +580,39 @@ export default function StudioPage() {
                   </div>
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: '14px', color: 'var(--text-secondary)' }}>
                     This usually takes about 15-30 seconds per image. Hang tight!
+                  </div>
+                </div>
+              )}
+
+              {/* Text Editor Sidebar */}
+              {screenshots[selectedIndex]?.storage_path && (
+                <div style={{ width: '300px', background: '#fff', borderRadius: '12px', padding: '24px', border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: '20px', flexShrink: 0 }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 600, margin: 0 }}>Edit Typography</h3>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)' }}>Headline</label>
+                    <input 
+                      type="text" 
+                      value={screenshots[selectedIndex].headline || ''} 
+                      onChange={(e) => updateScreenshotText('headline', e.target.value)}
+                      placeholder="e.g. Track Your Scores"
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', fontSize: '14px' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)' }}>Subline</label>
+                    <input 
+                      type="text" 
+                      value={screenshots[selectedIndex].supporting || ''} 
+                      onChange={(e) => updateScreenshotText('supporting', e.target.value)}
+                      placeholder="e.g. The #1 Cricket App"
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', fontSize: '14px' }}
+                    />
+                  </div>
+                  
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5, marginTop: '8px' }}>
+                    Changes apply instantly to the canvas. Download will capture these exact words perfectly.
                   </div>
                 </div>
               )}

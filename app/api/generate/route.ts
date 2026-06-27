@@ -82,10 +82,11 @@ export async function POST(req: NextRequest) {
       
       // Step 1: Use GPT-4o to write the DALL-E prompt
       const content = [
-        { type: 'text', text: `You are an expert prompt engineer for DALL-E 3. We are generating an App Store mockup. 
-          The user uploaded a screenshot of their app UI. We want to generate a final 3D marketing image.
+        { type: 'text', text: `You are an expert prompt engineer for DALL-E 3. We are generating a pure background for an App Store mockup. 
+          The user uploaded a screenshot of their app UI so you understand the app's context and color scheme.
           ${stylePrompt ? `The user requested this specific style: "${stylePrompt}"` : 'Make it a highly stylized, modern 3D illustration.'}
-          Please write a highly detailed DALL-E 3 image generation prompt that describes the scene, the style, and explicitly mentions placing a generic phone displaying the app UI in the center. Write ONLY the prompt, no introductory text.` },
+          Please write a highly detailed DALL-E 3 image generation prompt that describes the perfect, immersive background scene for this app.
+          CRITICAL: Do NOT mention placing a phone, a screen, or any UI elements in the prompt. The background should be completely empty of any devices, phones, or screens. We just want the beautiful 3D environment. Write ONLY the prompt, no introductory text.` },
         {
           type: 'image_url',
           image_url: { url: `data:${img.mediaType};base64,${img.base64}` }
