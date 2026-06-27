@@ -134,142 +134,145 @@ export default function CanvasPreview({ screenshot, palette, className }: Canvas
 
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
-    // 1. Background gradient
-    const grad = ctx.createLinearGradient(0, 0, CANVAS_W, CANVAS_H);
-    grad.addColorStop(0, palette.bg || '#5B47E0');
-    grad.addColorStop(1, palette.bg2 || '#3730A3');
-    ctx.fillStyle = grad;
+    // 1. Background - Flat color, no gradients
+    ctx.fillStyle = palette.bg || '#f4f4f8';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-    // 2. Decorative floating cards
-    // Card 1 (top-right area)
-    ctx.save();
-    ctx.translate(CANVAS_W * 0.78, CANVAS_H * 0.14);
-    ctx.rotate((15 * Math.PI) / 180);
-    const [r1, g1, b1] = hexToRgb(palette.card1 || '#FFFFFF');
-    ctx.fillStyle = `rgba(${r1},${g1},${b1},0.18)`;
+    // Subtle pattern or flat accent shapes instead of glowing gradients
+    // We'll add a clean flat accent shape
+    ctx.fillStyle = palette.bg2 || '#ffffff';
     ctx.beginPath();
-    ctx.roundRect(-140, -80, 280, 160, 20);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(CANVAS_W, 0);
+    ctx.lineTo(CANVAS_W, CANVAS_H * 0.4);
+    ctx.lineTo(0, CANVAS_H * 0.3);
     ctx.fill();
-    ctx.restore();
 
-    // Card 2 (bottom-left area)
-    ctx.save();
-    ctx.translate(CANVAS_W * 0.18, CANVAS_H * 0.82);
-    ctx.rotate((-12 * Math.PI) / 180);
-    const [r2, g2, b2] = hexToRgb(palette.card2 || '#FFFFFF');
-    ctx.fillStyle = `rgba(${r2},${g2},${b2},0.14)`;
+    // 2. Icon Badge (Top center, flat design, no shadow)
+    const badgeR = 56;
+    const badgeX = CANVAS_W / 2;
+    const badgeY = 180;
+
+    // Outer border for depth
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.roundRect(-110, -60, 220, 120, 16);
+    ctx.arc(badgeX, badgeY, badgeR + 8, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
+    ctx.strokeStyle = '#e2e2ea';
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
-    // 3. Text section (top)
-    const textColor = palette.text || '#FFFFFF';
-    const textPadding = 90;
-    const textY = 160;
+    // Inner badge
+    ctx.fillStyle = palette.accent || '#10b981';
+    ctx.beginPath();
+    ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
+    ctx.fill();
 
+    drawIcon(ctx, screenshot.icon || 'spark', badgeX, badgeY, badgeR);
+
+    // 3. Text section
+    const textColor = palette.text || '#0d0d12';
+    const textPadding = 80;
+    const maxLineWidth = CANVAS_W - textPadding * 2;
+    
+    let currentY = badgeY + 120;
+    
     // Eyebrow
-    ctx.font = `600 28px 'Inter', sans-serif`;
-    ctx.fillStyle = textColor;
-    ctx.globalAlpha = 0.72;
-    ctx.letterSpacing = '2px';
-    ctx.fillText((screenshot.eyebrow || 'Label').toUpperCase(), textPadding, textY);
-    ctx.globalAlpha = 1;
-    ctx.letterSpacing = '0px';
+    const eyebrow = (screenshot.eyebrow || '').toUpperCase();
+    if (eyebrow) {
+      ctx.font = `700 24px 'Space Grotesk', sans-serif`;
+      ctx.fillStyle = palette.accent || '#10b981';
+      ctx.textAlign = 'center';
+      ctx.letterSpacing = '2px';
+      ctx.fillText(eyebrow, CANVAS_W / 2, currentY);
+      currentY += 60;
+      ctx.letterSpacing = '0px';
+    } else {
+      currentY += 20;
+    }
 
     // Headline
     const headline = screenshot.headline || 'Headline';
-    ctx.font = `700 90px 'Space Grotesk', sans-serif`;
+    ctx.font = `700 88px 'Space Grotesk', sans-serif`;
     ctx.fillStyle = textColor;
+    ctx.textAlign = 'center';
+    ctx.letterSpacing = '-2px';
 
-    // Word-wrap headline
     const words = headline.split(' ');
-    const maxLineWidth = CANVAS_W - textPadding * 2;
     let line = '';
-    let headlineY = textY + 70;
     for (const word of words) {
       const testLine = line + (line ? ' ' : '') + word;
       const metrics = ctx.measureText(testLine);
       if (metrics.width > maxLineWidth && line) {
-        ctx.fillText(line, textPadding, headlineY);
+        ctx.fillText(line, CANVAS_W / 2, currentY);
         line = word;
-        headlineY += 108;
+        currentY += 100;
       } else {
         line = testLine;
       }
     }
-    ctx.fillText(line, textPadding, headlineY);
+    ctx.fillText(line, CANVAS_W / 2, currentY);
+    ctx.letterSpacing = '0px';
+    currentY += 80;
 
     // Supporting text
     const supporting = screenshot.supporting || '';
-    ctx.font = `400 32px 'Inter', sans-serif`;
-    ctx.fillStyle = textColor;
-    ctx.globalAlpha = 0.82;
-    const supY = headlineY + 70;
-
-    // Word-wrap supporting
-    let supLine = '';
-    let supLineY = supY;
-    for (const word of supporting.split(' ')) {
-      const testLine = supLine + (supLine ? ' ' : '') + word;
-      if (ctx.measureText(testLine).width > maxLineWidth && supLine) {
-        ctx.fillText(supLine, textPadding, supLineY);
-        supLine = word;
-        supLineY += 48;
-      } else {
-        supLine = testLine;
+    if (supporting) {
+      ctx.font = `400 34px 'Inter', sans-serif`;
+      ctx.fillStyle = '#52525f'; // specific muted color from constraints
+      ctx.textAlign = 'center';
+      
+      let supLine = '';
+      for (const word of supporting.split(' ')) {
+        const testLine = supLine + (supLine ? ' ' : '') + word;
+        if (ctx.measureText(testLine).width > maxLineWidth && supLine) {
+          ctx.fillText(supLine, CANVAS_W / 2, currentY);
+          supLine = word;
+          currentY += 52;
+        } else {
+          supLine = testLine;
+        }
       }
+      ctx.fillText(supLine, CANVAS_W / 2, currentY);
+      currentY += 100;
+    } else {
+      currentY += 60;
     }
-    ctx.fillText(supLine, textPadding, supLineY);
-    ctx.globalAlpha = 1;
 
-    // 4. Phone frame
-    const phoneW = 480;
-    const phoneH = 880;
+    // 4. Modern Flat Phone Frame
+    const phoneW = 820;
+    const phoneH = 1680;
     const phoneX = (CANVAS_W - phoneW) / 2;
-    const phoneY = supLineY + 90;
+    const phoneY = currentY;
 
-    // Phone shadow
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.35)';
-    ctx.shadowBlur = 80;
-    ctx.shadowOffsetY = 30;
-    ctx.fillStyle = '#1A1816';
-    ctx.beginPath();
-    ctx.roundRect(phoneX, phoneY, phoneW, phoneH, 48);
-    ctx.fill();
-    ctx.restore();
-
-    // Phone body
-    ctx.fillStyle = '#1A1816';
+    // Flat phone body (no shadows, just borders)
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.roundRect(phoneX, phoneY, phoneW, phoneH, 48);
     ctx.fill();
 
-    // Bezel inner
-    const bezel = 14;
-    ctx.fillStyle = '#0A0A0A';
+    // Outer border for depth
+    ctx.strokeStyle = '#e2e2ea';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Screen Bezel Inner
+    const bezel = 20;
+    ctx.fillStyle = '#0d0d12'; // Near black
     ctx.beginPath();
-    ctx.roundRect(phoneX + bezel, phoneY + bezel, phoneW - bezel * 2, phoneH - bezel * 2, 36);
+    ctx.roundRect(phoneX + bezel, phoneY + bezel, phoneW - bezel * 2, phoneH - bezel * 2, 32);
     ctx.fill();
 
     // Screen area
-    const screenX = phoneX + bezel + 2;
-    const screenY = phoneY + bezel + 2;
-    const screenW = phoneW - (bezel + 2) * 2;
-    const screenH = phoneH - (bezel + 2) * 2;
+    const screenX = phoneX + bezel + 4;
+    const screenY = phoneY + bezel + 4;
+    const screenW = phoneW - (bezel + 4) * 2;
+    const screenH = phoneH - (bezel + 4) * 2;
 
-    // Camera notch
-    ctx.fillStyle = '#1A1816';
-    ctx.beginPath();
-    ctx.roundRect(phoneX + phoneW / 2 - 50, phoneY + bezel - 2, 100, 28, 14);
-    ctx.fill();
-
-    // Screenshot image inside screen
+    // Screenshot inside screen
     ctx.save();
     ctx.beginPath();
-    ctx.roundRect(screenX, screenY, screenW, screenH, 34);
+    ctx.roundRect(screenX, screenY, screenW, screenH, 28);
     ctx.clip();
 
     if (screenshot.dataUrl) {
@@ -279,7 +282,7 @@ export default function CanvasPreview({ screenshot, palette, className }: Canvas
         img.onerror = () => resolve();
         img.src = screenshot.dataUrl!;
       });
-      // Fit image to screen (cover)
+      // cover
       const imgAspect = img.width / img.height;
       const screenAspect = screenW / screenH;
       let drawW = screenW, drawH = screenH, drawX = screenX, drawY = screenY;
@@ -294,31 +297,28 @@ export default function CanvasPreview({ screenshot, palette, className }: Canvas
       }
       ctx.drawImage(img, drawX, drawY, drawW, drawH);
     } else {
-      // Placeholder gradient
-      const ph = ctx.createLinearGradient(screenX, screenY, screenX, screenY + screenH);
-      ph.addColorStop(0, '#2D2D2D');
-      ph.addColorStop(1, '#1A1A1A');
-      ctx.fillStyle = ph;
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(screenX, screenY, screenW, screenH);
     }
+    
+    // Flat top bar indicator
+    ctx.fillStyle = 'rgba(0,0,0,0.04)';
+    ctx.fillRect(screenX, screenY, screenW, 40);
+
     ctx.restore();
 
-    // 5. Icon badge
-    const badgeR = 56;
-    const badgeX = phoneX + phoneW - 30;
-    const badgeY = phoneY + phoneH - 20;
-
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.25)';
-    ctx.shadowBlur = 20;
-    ctx.shadowOffsetY = 8;
-    ctx.fillStyle = palette.accent || '#5B47E0';
+    // Flat notch
+    ctx.fillStyle = '#0d0d12';
     ctx.beginPath();
-    ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
+    ctx.roundRect(CANVAS_W / 2 - 80, phoneY + bezel, 160, 44, 22);
     ctx.fill();
-    ctx.restore();
+    
+    // Flat camera pill inside notch
+    ctx.fillStyle = '#1e1e24';
+    ctx.beginPath();
+    ctx.roundRect(CANVAS_W / 2 + 30, phoneY + bezel + 12, 20, 20, 10);
+    ctx.fill();
 
-    drawIcon(ctx, screenshot.icon || 'spark', badgeX, badgeY, badgeR);
   }, [screenshot, palette]);
 
   useEffect(() => {

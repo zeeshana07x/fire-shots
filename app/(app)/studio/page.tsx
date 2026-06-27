@@ -4,28 +4,35 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import JSZip from 'jszip';
-import { ScreenshotItem, ColorPalette, ScreenshotContent } from '@/lib/types';
+import { ScreenshotItem, ScreenshotContent } from '@/lib/types';
 import AppNav from '@/components/layout/AppNav';
 import UploadZone from '@/components/studio/UploadZone';
-import ScreenshotGrid from '@/components/studio/ScreenshotGrid';
-import EditorPanel from '@/components/studio/EditorPanel';
-import CanvasPreview from '@/components/studio/CanvasPreview';
+
+const PRESET_STYLES = [
+  { id: '3d-fox', name: '3D Character (Running Fox)', prompt: 'A highly rendered 3D scene with a cute cartoon character running on a track, beautiful sunny lighting, vibrant colors' },
+  { id: '2d-raccoon', name: '2D Mascot (Raccoon)', prompt: 'A flat 2D illustrated style forest with a cute raccoon mascot, soft pastel colors' },
+  { id: '3d-cafe', name: '3D Claymation Cafe', prompt: 'A 3D claymation style isometric cozy cafe interior with miniature people working on laptops' },
+  { id: 'flat-remote', name: 'Flat Vector Hand', prompt: 'Flat vector art of a hand holding the phone, abstract shapes in the background' }
+];
 
 export default function StudioPage() {
   const router = useRouter();
 
   // Phase 1: Uploads
   const [screenshots, setScreenshots] = useState<ScreenshotItem[]>([]);
-  const [palette, setPalette] = useState<ColorPalette | null>(null);
+  const [referenceFile, setReferenceFile] = useState<File | null>(null);
+  const [referenceDataUrl, setReferenceDataUrl] = useState<string | null>(null);
+  const [selectedStyleId, setSelectedStyleId] = useState<string>('3d-fox');
+  const [customPrompt, setCustomPrompt] = useState<string>('');
 
-  // Phase 2/3: Editor state
+  // Phase 2: Generation state
   const [generating, setGenerating] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [revising, setRevising] = useState(false);
 
-  // Phase 4: Download state
+  // Phase 3: Download state
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasGenerated, setHasGenerated] = useState(false);
 
   const handleFilesSelected = async (files: File[]) => {
     setError(null);
@@ -54,15 +61,17 @@ export default function StudioPage() {
     setScreenshots((prev) => [...prev, ...newItems].slice(0, 10)); // Max 10
   };
 
-  const removeScreenshot = (index: number) => {
-    setScreenshots((prev) => {
-      const copy = [...prev];
-      copy.splice(index, 1);
-      return copy.map((s, i) => ({ ...s, position: i }));
+  const handleReferenceSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setReferenceFile(file);
+    const dataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.readAsDataURL(file);
     });
-    if (selectedIndex >= screenshots.length - 1) {
-      setSelectedIndex(Math.max(0, screenshots.length - 2));
-    }
+    setReferenceDataUrl(dataUrl);
+    setSelectedStyleId('custom');
   };
 
   const handleGenerate = async () => {
@@ -80,10 +89,28 @@ export default function StudioPage() {
         };
       });
 
+      let refPayload = undefined;
+      if (referenceDataUrl) {
+        const parts = referenceDataUrl.split(',');
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        refPayload = {
+          base64: parts[1],
+          mediaType: mimeMatch ? mimeMatch[1] : 'image/png'
+        };
+      }
+
+      const stylePrompt = selectedStyleId === 'custom' 
+        ? customPrompt 
+        : PRESET_STYLES.find(s => s.id === selectedStyleId)?.prompt;
+
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images: imagesPayload }),
+        body: JSON.stringify({ 
+          images: imagesPayload,
+          referenceImage: refPayload,
+          stylePrompt
+        }),
       });
 
       const data = await res.json();
@@ -92,17 +119,14 @@ export default function StudioPage() {
         throw new Error(data.error || 'Failed to generate');
       }
 
-      setPalette(data.palette);
       setScreenshots((prev) =>
         prev.map((s, i) => ({
           ...s,
           id: data.screenshots[i]?.id || s.id,
-          eyebrow: data.screenshots[i]?.eyebrow || 'New Feature',
-          headline: data.screenshots[i]?.headline || 'Feature Title',
-          supporting: data.screenshots[i]?.supporting || 'Feature description',
-          icon: data.screenshots[i]?.icon || 'spark',
+          storage_path: data.screenshots[i]?.storage_path,
         }))
       );
+      setHasGenerated(true);
       setSelectedIndex(0);
       router.refresh();
     } catch (err: any) {
@@ -112,71 +136,16 @@ export default function StudioPage() {
     }
   };
 
-  const updateScreenshot = (fields: Partial<ScreenshotContent>) => {
-    setScreenshots((prev) => {
-      const copy = [...prev];
-      copy[selectedIndex] = { ...copy[selectedIndex], ...fields };
-      return copy;
-    });
-  };
-
-  const handleRevise = async (instruction: string) => {
-    const current = screenshots[selectedIndex];
-    if (!current.id || current.id.startsWith('local-')) {
-      setError('Cannot revise unsaved screenshot');
-      return;
-    }
-
-    setRevising(true);
-    setError(null);
-
-    try {
-      const res = await fetch('/api/revise', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          screenshotId: current.id,
-          instruction,
-          currentContent: {
-            eyebrow: current.eyebrow,
-            headline: current.headline,
-            supporting: current.supporting,
-            icon: current.icon
-          }
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Revision failed');
-
-      updateScreenshot({
-        eyebrow: data.eyebrow,
-        headline: data.headline,
-        supporting: data.supporting,
-        icon: data.icon,
-      });
-      router.refresh();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setRevising(false);
-    }
-  };
-
-  const getCanvasBlob = async (id: string): Promise<Blob | null> => {
-    const canvas = document.querySelector(`canvas[data-canvas-id="${id}"]`) as HTMLCanvasElement | null;
-    if (!canvas) return null;
-    return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
-  };
-
   const handleDownloadSingle = async () => {
     setDownloading(true);
     try {
       const current = screenshots[selectedIndex];
-      const blob = await getCanvasBlob(current.id);
-      if (!blob) throw new Error('Canvas not found');
-
+      if (!current.storage_path) return;
+      
+      const res = await fetch(current.storage_path);
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
+      
       const a = document.createElement('a');
       a.href = url;
       a.download = `mockup-${current.position + 1}.png`;
@@ -195,10 +164,10 @@ export default function StudioPage() {
     try {
       const zip = new JSZip();
       
-      // Hidden canvas generator loop to assemble the ZIP properly
       for (const s of screenshots) {
-        const blob = await getCanvasBlob(s.id);
-        if (blob) {
+        if (s.storage_path) {
+          const res = await fetch(s.storage_path);
+          const blob = await res.blob();
           zip.file(`mockup-${s.position + 1}.png`, blob);
         }
       }
@@ -218,15 +187,14 @@ export default function StudioPage() {
     }
   };
 
-  const phase = palette ? 'edit' : 'upload';
-  const projectTitle = screenshots[0]?.headline || 'HealthTrack Pro';
+  const phase = hasGenerated ? 'view' : 'upload';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
       
       {/* --- HEADER --- */}
       {phase === 'upload' ? (
-        <AppNav credits={150} userEmail="zeeshana07x" />
+        <AppNav credits={150} userEmail="user@example.com" />
       ) : (
         <header
           style={{
@@ -240,10 +208,9 @@ export default function StudioPage() {
             flexShrink: 0,
           }}
         >
-          {/* Left info */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <Link
-              href="/dashboard"
+            <button
+              onClick={() => setHasGenerated(false)}
               className="btn btn-secondary btn-sm"
               style={{
                 display: 'flex',
@@ -258,48 +225,24 @@ export default function StudioPage() {
                 <line x1="19" y1="12" x2="5" y2="12" />
                 <polyline points="12 19 5 12 12 5" />
               </svg>
-              Dashboard
-            </Link>
-            
-            <div style={{ width: '1px', height: '20px', background: 'var(--border-subtle)' }} />
-
-            <div style={{ display: 'inline-flex', alignItems: 'center' }}>
-              <span style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 700, letterSpacing: '-1.2px', color: 'var(--accent)' }}>
-                Fire
-              </span>
-              <span style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 700, letterSpacing: '-1.2px', color: 'var(--text-primary)' }}>
-                shots
-              </span>
-            </div>
-
-            <div style={{ width: '1px', height: '20px', background: 'var(--border-subtle)' }} />
-
-            <span style={{ fontFamily: 'var(--font-body)', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-              {projectTitle}
-            </span>
+              Back to Studio
+            </button>
           </div>
 
-          {/* Right actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
               onClick={handleDownloadSingle}
               className="btn btn-secondary btn-sm"
               disabled={downloading}
             >
-              This one
+              Download This
             </button>
             <button
               onClick={handleDownloadAll}
               className="btn btn-primary btn-sm"
               disabled={downloading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              Download all
+              Download All
             </button>
           </div>
         </header>
@@ -318,30 +261,92 @@ export default function StudioPage() {
             <div style={{ width: '100%', maxWidth: 'var(--max-width)', display: 'flex', flexDirection: 'column', gap: '32px' }}>
               <div className="animate-fade-in">
                 <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '28px', fontWeight: 700, letterSpacing: '-1.5px', marginBottom: '5px' }}>
-                  New batch
+                  Generate DALL-E Mockups
                 </h1>
                 <p style={{ fontFamily: 'var(--font-body)', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                  Upload up to 10 screenshots. Order is preserved in the output.
+                  Upload your UI screenshots, select a style, and AI will generate the full 3D composition.
                 </p>
               </div>
 
-              <UploadZone onFilesSelected={handleFilesSelected} disabled={generating} />
+              {/* Upload Section */}
+              <div>
+                <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 600, marginBottom: '12px' }}>1. Upload UI Screenshots</h2>
+                <UploadZone onFilesSelected={handleFilesSelected} disabled={generating} />
+                
+                {screenshots.length > 0 && (
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '16px', flexWrap: 'wrap' }}>
+                    {screenshots.map((s, i) => (
+                      <div key={i} style={{ width: '80px', height: '140px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                        <img src={s.dataUrl!} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Style Selection Section */}
+              <div className="animate-fade-in delay-75">
+                <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 600, marginBottom: '12px' }}>2. Choose a Reference Style</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                  {PRESET_STYLES.map(style => (
+                    <div 
+                      key={style.id}
+                      onClick={() => { setSelectedStyleId(style.id); setReferenceDataUrl(null); }}
+                      style={{
+                        padding: '16px',
+                        borderRadius: '12px',
+                        border: selectedStyleId === style.id ? '2px solid var(--accent)' : '1px solid var(--border-subtle)',
+                        background: selectedStyleId === style.id ? 'var(--accent-tint)' : '#ffffff',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '8px', color: 'var(--text-primary)' }}>{style.name}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{style.prompt}</div>
+                    </div>
+                  ))}
+                  
+                  <div 
+                    onClick={() => setSelectedStyleId('custom')}
+                    style={{
+                      padding: '16px',
+                      borderRadius: '12px',
+                      border: selectedStyleId === 'custom' ? '2px solid var(--accent)' : '1px solid var(--border-subtle)',
+                      background: selectedStyleId === 'custom' ? 'var(--accent-tint)' : '#ffffff',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>Upload Custom Style</div>
+                    {selectedStyleId === 'custom' && (
+                      <>
+                        <input type="file" accept="image/*" onChange={handleReferenceSelected} style={{ fontSize: '12px' }} />
+                        {referenceDataUrl && (
+                          <img src={referenceDataUrl} alt="Reference" style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '6px' }} />
+                        )}
+                        <textarea 
+                          placeholder="Describe the style (e.g. 3D cute fox)" 
+                          value={customPrompt}
+                          onChange={e => setCustomPrompt(e.target.value)}
+                          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-subtle)', fontSize: '12px', minHeight: '60px' }}
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               {screenshots.length > 0 && (
-                <div className="animate-slide-in-right" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  <ScreenshotGrid
-                    screenshots={screenshots}
-                    onRemove={removeScreenshot}
-                    generating={generating}
-                  />
-
+                <div className="animate-slide-in-right">
                   <button
                     onClick={handleGenerate}
                     disabled={generating}
                     className="btn btn-primary btn-lg"
                     style={{ width: '100%', justifyContent: 'center' }}
                   >
-                    {generating ? 'Generating mockups...' : `Generate ${screenshots.length} screenshot${screenshots.length !== 1 ? 's' : ''} · ${screenshots.length} credit${screenshots.length !== 1 ? 's' : ''}`}
+                    {generating ? 'Generating with OpenAI...' : `Generate ${screenshots.length} Final Image${screenshots.length !== 1 ? 's' : ''}`}
                   </button>
                 </div>
               )}
@@ -349,7 +354,6 @@ export default function StudioPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', height: '100%', width: '100%', overflow: 'hidden' }}>
-            
             {/* COLUMN 1: LEFT VERTICAL SLIDES / THUMBNAILS (Width: 160px) */}
             <div
               style={{
@@ -373,67 +377,29 @@ export default function StudioPage() {
                     style={{
                       position: 'relative',
                       width: '100%',
-                      aspectRatio: '3/5',
+                      aspectRatio: '9/16',
                       borderRadius: '10px',
                       border: isActive ? '2px solid var(--accent)' : '1px solid var(--border-subtle)',
-                      background: `linear-gradient(135deg, ${palette?.bg || '#5B47E0'} 0%, ${palette?.bg2 || '#3730A3'} 100%)`,
                       overflow: 'hidden',
                       cursor: 'pointer',
-                      padding: '8px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'border-color 0.15s, transform 0.15s',
+                      padding: 0,
                     }}
                   >
-                    {/* Simulated Phone Mockup inside Left Thumbnail Button */}
-                    <div
-                      style={{
-                        width: '75%',
-                        height: '75%',
-                        borderRadius: '6px',
-                        background: '#0a0a0a',
-                        border: '1.5px solid #1a1816',
-                        position: 'relative',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {s.dataUrl && (
-                        <img
-                          src={s.dataUrl}
-                          alt=""
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                          }}
-                        />
-                      )}
-                    </div>
-
-                    {/* Small number indicator on active selection */}
-                    <span
-                      style={{
-                        position: 'absolute',
-                        bottom: '6px',
-                        left: '6px',
-                        fontSize: '9px',
-                        fontWeight: 700,
-                        color: '#ffffff',
-                        background: 'rgba(0,0,0,0.4)',
-                        padding: '1px 4px',
-                        borderRadius: '3px',
-                      }}
-                    >
-                      {i + 1}
-                    </span>
+                    {s.storage_path ? (
+                      <img
+                        src={s.storage_path}
+                        alt=""
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', background: '#e2e2ea', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>Loading...</div>
+                    )}
                   </button>
                 );
               })}
             </div>
 
-            {/* COLUMN 2: CENTER WORKSPACE WORK AREA (Large mockup preview) */}
+            {/* COLUMN 2: CENTER PREVIEW */}
             <div
               style={{
                 flex: 1,
@@ -446,54 +412,24 @@ export default function StudioPage() {
                 overflowY: 'auto',
               }}
             >
-              {palette && screenshots[selectedIndex] && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', width: '100%', maxWidth: '380px' }}>
-                  <div
-                    style={{
-                      width: '100%',
-                      background: '#ffffff',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-lg)',
-                      padding: '16px',
-                    }}
-                  >
-                    <CanvasPreview
-                      screenshot={screenshots[selectedIndex]}
-                      palette={palette}
-                      className="w-full"
-                    />
-                  </div>
-
+              {screenshots[selectedIndex]?.storage_path && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', width: '100%', maxWidth: '400px' }}>
+                  <img 
+                    src={screenshots[selectedIndex].storage_path!} 
+                    alt="Final Mockup" 
+                    style={{ width: '100%', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }} 
+                  />
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>
-                      1080 × 1920 px · store-ready
+                      Generated by OpenAI DALL-E 3
                     </span>
-                    <button
-                      onClick={handleDownloadSingle}
-                      className="btn btn-secondary btn-sm"
-                      style={{ padding: '8px 16px', fontSize: '13px' }}
-                    >
-                      Download PNG
-                    </button>
                   </div>
                 </div>
               )}
             </div>
-
-            {/* COLUMN 3: RIGHT PANEL EDITOR FIELDS (Width: 340px) */}
-            {palette && screenshots[selectedIndex] && (
-              <EditorPanel
-                screenshot={screenshots[selectedIndex]}
-                onUpdate={updateScreenshot}
-                onRevise={handleRevise}
-                revising={revising}
-              />
-            )}
-
           </div>
         )}
       </div>
-
     </div>
   );
 }
