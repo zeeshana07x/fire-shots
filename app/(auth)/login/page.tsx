@@ -35,108 +35,165 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center px-4"
-      style={{ background: 'var(--bg-base)' }}
+      style={{
+        minHeight: '100vh',
+        background: 'var(--bg-base)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+      }}
     >
-      <div className="w-full max-w-md animate-fade-in">
+      <div className="w-full animate-fade-in" style={{ maxWidth: '400px' }}>
+
         {/* Logo */}
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 no-underline">
-            <span style={{ fontSize: '28px' }}>🔥</span>
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <Link href="/" className="inline-flex items-center gap-0 no-underline">
             <span
-              className="font-display"
-              style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}
+              style={{
+                fontFamily: 'var(--font-heading)',
+                fontSize: '22px',
+                fontWeight: 700,
+                letterSpacing: '-1.5px',
+                color: 'var(--accent)',
+              }}
             >
-              Fireshots
+              Fire
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-heading)',
+                fontSize: '22px',
+                fontWeight: 700,
+                letterSpacing: '-1.5px',
+                color: 'var(--text-primary)',
+              }}
+            >
+              shots
             </span>
           </Link>
-          <p style={{ marginTop: '8px', color: 'var(--text-secondary)', fontSize: '14px' }}>
-            Sign in to your account
+        </div>
+
+        {/* Heading */}
+        <div style={{ marginBottom: '32px' }}>
+          <h1
+            style={{
+              fontFamily: 'var(--font-heading)',
+              fontSize: '28px',
+              fontWeight: 700,
+              letterSpacing: '-1.5px',
+              color: 'var(--text-primary)',
+              marginBottom: '6px',
+            }}
+          >
+            Welcome back
+          </h1>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: '14px', color: 'var(--text-secondary)' }}>
+            Sign in to your workspace
           </p>
         </div>
 
-        {/* Card */}
-        <div className="card" style={{ padding: '32px' }}>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div>
-              <label
-                htmlFor="email"
-                style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}
-              >
-                Email address
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input"
-                placeholder="you@example.com"
-                required
-                autoComplete="email"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="password"
-                style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '6px' }}
-              >
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input"
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-              />
-            </div>
-
-            {error && (
-              <div
-                style={{
-                  padding: '10px 14px',
-                  background: 'var(--error-light)',
-                  border: '1px solid #FCA5A5',
-                  borderRadius: 'var(--radius-md)',
-                  color: '#B91C1C',
-                  fontSize: '13px',
-                }}
-              >
-                {error}
-              </div>
-            )}
-
-            <button type="submit" className="btn btn-primary btn-lg" disabled={loading} style={{ width: '100%' }}>
-              {loading ? (
-                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <svg className="animate-spin" width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="37.7" strokeDashoffset="28" strokeLinecap="round" />
-                  </svg>
-                  Signing in…
-                </span>
-              ) : (
-                'Sign In'
-              )}
-            </button>
-          </form>
-
-          <div className="divider" style={{ margin: '24px 0' }} />
-
-          <p style={{ textAlign: 'center', fontSize: '14px', color: 'var(--text-secondary)' }}>
-            Don&apos;t have an account?{' '}
-            <Link
-              href="/signup"
-              style={{ color: 'var(--accent)', fontWeight: 500, textDecoration: 'none' }}
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div>
+            <label
+              htmlFor="email"
+              style={{
+                display: 'block',
+                fontFamily: 'var(--font-body)',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--text-muted)',
+                marginBottom: '7px',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
             >
-              Sign up free
-            </Link>
-          </p>
-        </div>
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="input"
+              placeholder="you@example.com"
+              required
+              autoComplete="email"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="password"
+              style={{
+                display: 'block',
+                fontFamily: 'var(--font-body)',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--text-muted)',
+                marginBottom: '7px',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="input"
+              placeholder="••••••••"
+              required
+              autoComplete="current-password"
+            />
+          </div>
+
+          {error && (
+            <div
+              style={{
+                padding: '10px 14px',
+                background: 'var(--error-light)',
+                border: '1px solid rgba(239,68,68,0.2)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--error)',
+                fontSize: '13px',
+                fontFamily: 'var(--font-body)',
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            className="btn btn-primary btn-lg"
+            disabled={loading}
+            style={{ width: '100%', marginTop: '4px' }}
+          >
+            {loading ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg className="animate-spin" width="15" height="15" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="37.7" strokeDashoffset="28" strokeLinecap="round" />
+                </svg>
+                Signing in…
+              </span>
+            ) : (
+              'Sign in'
+            )}
+          </button>
+        </form>
+
+        {/* Footer link */}
+        <p style={{ textAlign: 'center', marginTop: '24px', fontFamily: 'var(--font-body)', fontSize: '14px', color: 'var(--text-secondary)' }}>
+          No account?{' '}
+          <Link href="/signup" style={{ color: 'var(--accent)', fontWeight: 500 }}>
+            Sign up free
+          </Link>
+        </p>
       </div>
     </div>
   );

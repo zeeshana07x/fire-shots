@@ -9,7 +9,7 @@ interface UploadZoneProps {
 
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 const MAX_FILES = 10;
-const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 
 export default function UploadZone({ onFilesSelected, disabled }: UploadZoneProps) {
   const [dragOver, setDragOver] = useState(false);
@@ -25,7 +25,7 @@ export default function UploadZone({ onFilesSelected, disabled }: UploadZoneProp
         return `"${file.name}" is not a supported format. Use PNG, JPG, or WebP.`;
       }
       if (file.size > MAX_SIZE_BYTES) {
-        return `"${file.name}" exceeds the 5 MB size limit.`;
+        return `"${file.name}" exceeds the 15 MB size limit.`;
       }
     }
 
@@ -85,38 +85,28 @@ export default function UploadZone({ onFilesSelected, disabled }: UploadZoneProp
         onKeyDown={(e) => e.key === 'Enter' && handleClick()}
         className="flex flex-col items-center justify-center gap-4 cursor-pointer transition-all duration-200"
         style={{
-          padding: 'var(--space-12) var(--space-8)',
-          borderRadius: 'var(--radius-xl)',
-          border: `2px dashed ${dragOver ? 'var(--accent)' : 'var(--border-medium)'}`,
-          background: dragOver ? 'var(--accent-light)' : 'var(--bg-inset)',
+          padding: '56px 24px',
+          borderRadius: '14px',
+          border: `2px dashed ${dragOver ? 'var(--accent)' : '#c8c8d8'}`,
+          background: dragOver ? 'var(--accent-tint)' : '#f1f1f5',
           opacity: disabled ? 0.5 : 1,
           pointerEvents: disabled ? 'none' : 'auto',
         }}
       >
-        {/* Cloud Upload Icon */}
+        {/* Yellow Folder Icon */}
         <div
-          className="flex items-center justify-center rounded-2xl"
+          className="flex items-center justify-center"
           style={{
-            width: 64,
-            height: 64,
-            background: dragOver ? 'var(--accent)' : 'var(--bg-surface)',
-            boxShadow: 'var(--shadow-sm)',
+            width: '64px',
+            height: '64px',
             transition: 'all 0.2s ease',
           }}
         >
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 28 28"
-            fill="none"
-            stroke={dragOver ? '#fff' : 'var(--accent)'}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M6 20a5 5 0 01-.7-9.9 7 7 0 0113.6-2A5 5 0 0122 14a5 5 0 01-5 5H6z" />
-            <polyline points="10,15 14,11 18,15" />
-            <line x1="14" y1="11" x2="14" y2="21" />
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M10 4H4C2.9 4 2.01 4.9 2.01 6L2 18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V8C22 6.9 21.1 6 20 6H12L10 4Z"
+              fill="#fbbf24"
+            />
           </svg>
         </div>
 
@@ -124,19 +114,14 @@ export default function UploadZone({ onFilesSelected, disabled }: UploadZoneProp
         <div className="text-center">
           <p
             className="font-display text-base font-semibold mb-1"
-            style={{ color: 'var(--text-primary)' }}
+            style={{ color: 'var(--text-primary)', letterSpacing: '-0.5px' }}
           >
-            Drop your screenshots here
+            Drop screenshots here
           </p>
-          <p className="text-sm" style={{ color: 'var(--text-tertiary)' }}>
-            PNG, JPG or WebP · up to 10 at once
+          <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+            or click to browse · PNG, JPG · max 15 MB · up to 10
           </p>
         </div>
-
-        {/* Browse Button Visual */}
-        <span className="btn btn-sm btn-secondary mt-1">
-          Browse Files
-        </span>
 
         {/* Hidden File Input */}
         <input

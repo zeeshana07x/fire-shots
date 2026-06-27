@@ -5,92 +5,268 @@ import { PLANS } from '@/lib/types';
 
 export default function PricingPage() {
   return (
-    <div className="min-h-screen bg-[var(--bg-base)]">
-      {/* Navbar Minimal */}
-      <nav className="flex items-center justify-between px-6 lg:px-12 py-6 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]">
-        <Link href="/" className="inline-flex items-center gap-2 no-underline">
-          <span className="text-2xl">🔥</span>
-          <span className="font-display text-xl font-extrabold text-[var(--text-primary)] tracking-tight">Fireshots</span>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
+
+      {/* Navbar */}
+      <nav style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '0 32px',
+        height: '60px',
+        background: '#ffffff',
+        borderBottom: '1px solid var(--border-subtle)',
+        position: 'sticky',
+        top: 0,
+        zIndex: 50,
+      }}>
+        <Link href="/" className="inline-flex items-center gap-0 no-underline">
+          <span
+            style={{
+              fontFamily: 'var(--font-heading)',
+              fontSize: '17px',
+              fontWeight: 700,
+              letterSpacing: '-1.5px',
+              color: 'var(--accent)',
+            }}
+          >
+            Fire
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-heading)',
+              fontSize: '17px',
+              fontWeight: 700,
+              letterSpacing: '-1.5px',
+              color: 'var(--text-primary)',
+            }}
+          >
+            shots
+          </span>
         </Link>
-        <Link href="/login" className="btn btn-ghost font-medium">Log In</Link>
+        <Link href="/login" className="btn btn-ghost btn-sm">Log In</Link>
       </nav>
 
-      <main className="max-w-6xl mx-auto px-6 py-20">
-        <div className="text-center mb-16 animate-fade-in">
-          <h1 className="font-display text-4xl lg:text-5xl font-extrabold text-[var(--text-primary)] tracking-tight mb-4">
+      <main style={{ maxWidth: 'var(--max-width)', margin: '0 auto', padding: '72px 24px' }}>
+
+        {/* Header */}
+        <div className="animate-fade-in" style={{ textAlign: 'center', marginBottom: '56px' }}>
+          <div className="badge badge-accent" style={{ marginBottom: '20px' }}>
+            Simple credit pricing
+          </div>
+          <h1
+            style={{
+              fontFamily: 'var(--font-heading)',
+              fontSize: 'clamp(28px, 4vw, 42px)',
+              fontWeight: 700,
+              letterSpacing: '-1.5px',
+              color: 'var(--text-primary)',
+              marginBottom: '12px',
+            }}
+          >
             Simple, transparent pricing
           </h1>
-          <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-            Get professional, store-ready marketing mockups in seconds. No complex design software, just upload and go.
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: '15px', color: 'var(--text-secondary)', maxWidth: '480px', margin: '0 auto', lineHeight: 1.65 }}>
+            1 credit = 1 finished screenshot · 1 credit = 4 AI revisions
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 items-start">
+        {/* Plans */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', alignItems: 'start', marginBottom: '72px' }}>
           {PLANS.map((plan, i) => {
             const isPopular = plan.id === 'pro';
             return (
-              <div 
+              <div
                 key={plan.id}
-                className={`card animate-fade-in p-8 relative flex flex-col ${isPopular ? 'border-2 border-[var(--accent)] shadow-xl scale-105 z-10' : ''}`}
-                style={{ animationDelay: `${i * 150}ms` }}
+                className="animate-fade-in"
+                style={{
+                  background: '#ffffff',
+                  border: isPopular ? '1.5px solid var(--accent)' : '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '32px 28px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  position: 'relative',
+                  animationDelay: `${i * 120}ms`,
+                }}
               >
                 {isPopular && (
-                  <span className="absolute -top-4 left-1/2 -translate-x-1/2 badge badge-accent px-3 py-1 text-xs">
-                    Most Popular
-                  </span>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '-12px',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      background: 'var(--accent)',
+                      color: '#ffffff',
+                      fontFamily: 'var(--font-heading)',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      letterSpacing: '0.02em',
+                      padding: '4px 14px',
+                      borderRadius: 'var(--radius-full)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Most popular
+                  </div>
                 )}
-                
-                <h3 className="font-display text-2xl font-bold capitalize mb-2">{plan.name}</h3>
-                <div className="flex items-baseline gap-1 mb-6">
-                  <span className="font-display text-5xl font-extrabold">${plan.price}</span>
-                  <span className="text-[var(--text-secondary)] font-medium">/mo</span>
-                </div>
-                
-                <div className="p-4 rounded-xl bg-[var(--bg-inset)] mb-8">
-                  <div className="text-lg font-bold text-[var(--accent)] mb-1">{plan.credits} Credits</div>
-                  <div className="text-sm text-[var(--text-secondary)]">~{plan.credits} generated mockups</div>
+
+                {/* Plan name */}
+                <div
+                  style={{
+                    fontFamily: 'var(--font-body)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    marginBottom: '16px',
+                  }}
+                >
+                  {plan.name}
                 </div>
 
-                <ul className="flex flex-col gap-4 mb-8 flex-1">
+                {/* Price */}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px', marginBottom: '4px' }}>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-heading)',
+                      fontSize: '44px',
+                      fontWeight: 700,
+                      letterSpacing: '-2px',
+                      color: 'var(--text-primary)',
+                      lineHeight: 1,
+                    }}
+                  >
+                    ${plan.price}
+                  </span>
+                </div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-muted)', marginBottom: '24px' }}>
+                  per month
+                </div>
+
+                {/* Credits highlight */}
+                <div
+                  style={{
+                    padding: '14px 16px',
+                    background: 'var(--accent-tint)',
+                    border: '1px solid var(--accent-border)',
+                    borderRadius: 'var(--radius-md)',
+                    marginBottom: '24px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-heading)',
+                      fontSize: '20px',
+                      fontWeight: 700,
+                      letterSpacing: '-1px',
+                      color: 'var(--accent-hover)',
+                      marginBottom: '2px',
+                    }}
+                  >
+                    {plan.credits} credits
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                    = {plan.credits} screenshots
+                  </div>
+                </div>
+
+                {/* Features */}
+                <ul style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '28px', flex: 1 }}>
                   {[
                     `${plan.credits} AI generations`,
                     'Smart color matching',
                     'High-res PNG exports',
                     'AI copy revisions (0.25cr each)',
                   ].map((feature, j) => (
-                    <li key={j} className="flex items-start gap-3 text-sm text-[var(--text-secondary)] font-medium">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--success)] shrink-0 mt-0.5">
+                    <li key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        style={{ color: 'var(--accent)', flexShrink: 0, marginTop: '2px' }}
+                      >
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
-                      {feature}
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                        {feature}
+                      </span>
                     </li>
                   ))}
                 </ul>
 
-                <Link 
-                  href={`/api/checkout?plan=${plan.id}`} 
-                  className={`btn btn-lg w-full ${isPopular ? 'btn-primary' : 'btn-secondary'}`}
+                {/* CTA */}
+                <Link
+                  href={`/api/checkout?plan=${plan.id}`}
+                  className={`btn btn-lg ${isPopular ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ width: '100%', justifyContent: 'center' }}
                 >
-                  Subscribe
+                  {isPopular ? `Choose ${plan.name}` : `Choose ${plan.name}`}
                 </Link>
               </div>
             );
           })}
         </div>
 
-        <div className="mt-24 max-w-3xl mx-auto animate-fade-in delay-300">
-          <h2 className="font-display text-2xl font-bold text-center mb-8">Frequently Asked Questions</h2>
-          <div className="grid sm:grid-cols-2 gap-8">
-            <div>
-              <h4 className="font-bold mb-2">What is a credit?</h4>
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                One credit equals one generated marketing screenshot. Revising the AI copy on a generated screenshot costs 0.25 credits. Unused credits roll over as long as your subscription is active.
+        {/* Fine print */}
+        <p style={{ textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-muted)', marginBottom: '72px' }}>
+          Credits top up monthly. Unused credits roll over for 1 month. Cancel anytime.
+        </p>
+
+        {/* FAQ */}
+        <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+          <h2
+            style={{
+              fontFamily: 'var(--font-heading)',
+              fontSize: '22px',
+              fontWeight: 700,
+              letterSpacing: '-1.5px',
+              textAlign: 'center',
+              marginBottom: '32px',
+            }}
+          >
+            Frequently asked questions
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px' }}>
+            <div className="card" style={{ padding: '20px' }}>
+              <h4
+                style={{
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  letterSpacing: '-0.5px',
+                  marginBottom: '8px',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                What is a credit?
+              </h4>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.65 }}>
+                One credit equals one generated marketing screenshot. Revising the AI copy costs 0.25 credits. Unused credits roll over as long as your subscription is active.
               </p>
             </div>
-            <div>
-              <h4 className="font-bold mb-2">Can I cancel anytime?</h4>
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
-                Yes, you can manage or cancel your subscription at any time from your dashboard. You will keep your existing credits until they run out or your billing period ends.
+            <div className="card" style={{ padding: '20px' }}>
+              <h4
+                style={{
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  letterSpacing: '-0.5px',
+                  marginBottom: '8px',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                Can I cancel anytime?
+              </h4>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.65 }}>
+                Yes, manage or cancel your subscription at any time from your dashboard. You keep your existing credits until they run out or your billing period ends.
               </p>
             </div>
           </div>

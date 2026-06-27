@@ -25,17 +25,17 @@ export default function ScreenshotGrid({
   if (screenshots.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
       {screenshots.map((item, index) => (
         <div
           key={item.id}
           className={`card relative overflow-hidden group animate-fade-in-scale ${
             delayClasses[index % delayClasses.length]
           }`}
-          style={{ padding: 0 }}
+          style={{ padding: 0, background: '#f4f4f8' }}
         >
           {/* Image Thumbnail */}
-          <div className="relative aspect-[3/4] overflow-hidden" style={{ borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0' }}>
+          <div className="relative aspect-[3/4] overflow-hidden" style={{ borderRadius: 'var(--radius-lg)' }}>
             {item.dataUrl && (
               <img
                 src={item.dataUrl}
@@ -55,54 +55,49 @@ export default function ScreenshotGrid({
               />
             )}
 
-            {/* Position Badge — top-left */}
+            {/* Position Badge — bottom-left as a dark block */}
             <span
-              className="absolute top-2.5 left-2.5 badge"
+              className="absolute bottom-2 left-2 flex items-center justify-center rounded"
               style={{
-                background: 'rgba(26,24,22,0.7)',
+                background: '#1e293b',
                 color: '#fff',
-                backdropFilter: 'blur(4px)',
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: 700,
-                minWidth: 24,
-                justifyContent: 'center',
+                width: 18,
+                height: 18,
               }}
             >
-              {item.position}
+              {index + 1}
             </span>
 
-            {/* Remove Button — top-right */}
+            {/* Remove Button — top-right dark circle with white cross */}
             {!generating && (
               <button
-                onClick={() => onRemove(index)}
-                className="absolute top-2 right-2 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove(index);
+                }}
+                className="absolute top-2 right-2 flex items-center justify-center rounded-full hover:scale-105 active:scale-95 transition-transform"
                 style={{
-                  width: 28,
-                  height: 28,
-                  background: 'rgba(26,24,22,0.65)',
-                  backdropFilter: 'blur(4px)',
+                  width: 20,
+                  height: 20,
+                  background: '#334155',
                   color: '#fff',
                   border: 'none',
                   cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
                 aria-label={`Remove screenshot ${item.position}`}
               >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <line x1="3" y1="3" x2="11" y2="11" />
-                  <line x1="11" y1="3" x2="3" y2="11" />
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="2" y1="2" x2="8" y2="8" />
+                  <line x1="8" y1="2" x2="2" y2="8" />
                 </svg>
               </button>
             )}
-          </div>
-
-          {/* Footer Info */}
-          <div className="px-3 py-2.5">
-            <p
-              className="text-xs font-medium truncate"
-              style={{ color: 'var(--text-secondary)' }}
-            >
-              {item.file?.name || `Screenshot ${item.position}`}
-            </p>
           </div>
         </div>
       ))}

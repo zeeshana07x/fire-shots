@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       checkoutParams.customerId = profile.polar_customer_id;
     }
 
-    const checkout = await polar.checkouts.create({
+    const checkout = await (polar.checkouts.create as any)({
       productId,
       customerEmail: user.email ?? '',
       successUrl: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?subscribed=true`,

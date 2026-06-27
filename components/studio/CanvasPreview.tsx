@@ -170,17 +170,17 @@ export default function CanvasPreview({ screenshot, palette, className }: Canvas
     const textY = 160;
 
     // Eyebrow
-    ctx.font = `500 30px 'DM Sans', sans-serif`;
+    ctx.font = `600 28px 'Inter', sans-serif`;
     ctx.fillStyle = textColor;
     ctx.globalAlpha = 0.72;
-    ctx.letterSpacing = '3px';
+    ctx.letterSpacing = '2px';
     ctx.fillText((screenshot.eyebrow || 'Label').toUpperCase(), textPadding, textY);
     ctx.globalAlpha = 1;
     ctx.letterSpacing = '0px';
 
     // Headline
     const headline = screenshot.headline || 'Headline';
-    ctx.font = `800 96px 'Bricolage Grotesque', sans-serif`;
+    ctx.font = `700 90px 'Space Grotesk', sans-serif`;
     ctx.fillStyle = textColor;
 
     // Word-wrap headline
@@ -203,7 +203,7 @@ export default function CanvasPreview({ screenshot, palette, className }: Canvas
 
     // Supporting text
     const supporting = screenshot.supporting || '';
-    ctx.font = `400 34px 'DM Sans', sans-serif`;
+    ctx.font = `400 32px 'Inter', sans-serif`;
     ctx.fillStyle = textColor;
     ctx.globalAlpha = 0.82;
     const supY = headlineY + 70;
