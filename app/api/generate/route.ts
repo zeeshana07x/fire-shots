@@ -113,8 +113,7 @@ export async function POST(req: NextRequest) {
         model: "gpt-image-2",
         prompt: imagePrompt,
         n: 1,
-        size: "1024x1792", // GPT Image 2 supports vertical format
-        response_format: "b64_json"
+        size: "1024x1792" // GPT Image 2 supports vertical format
       });
 
       if (!imageResponse.data || imageResponse.data.length === 0) {
