@@ -112,9 +112,11 @@ export async function POST(req: NextRequest) {
         prompt: dallePrompt,
         n: 1,
         size: "1024x1792", // DALL-E 3 supports vertical format
+        response_format: "b64_json"
       });
 
-      const generatedUrl = dalleResponse.data[0].url;
+      const b64 = dalleResponse.data[0].b64_json;
+      const generatedUrl = `data:image/png;base64,${b64}`;
 
       generatedScreenshots.push({
         batch_id: batch.id,
@@ -123,7 +125,7 @@ export async function POST(req: NextRequest) {
         headline: '',
         supporting: '',
         icon: 'spark',
-        storage_path: generatedUrl // We'll store the generated URL here for now
+        storage_path: generatedUrl // Store the data URL so the frontend can render it directly
       });
     }
 
