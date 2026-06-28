@@ -1,18 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import JSZip from 'jszip';
-import { ScreenshotItem, ScreenshotContent } from '@/lib/types';
+import { ScreenshotItem } from '@/lib/types';
 import AppNav from '@/components/layout/AppNav';
 import UploadZone from '@/components/studio/UploadZone';
 
 const PRESET_STYLES = [
-  { id: '3d-fox', name: '3D Character (Running Fox)', prompt: 'A highly rendered 3D scene with a cute cartoon character running on a track, beautiful sunny lighting, vibrant colors' },
-  { id: '2d-raccoon', name: '2D Mascot (Raccoon)', prompt: 'A flat 2D illustrated style forest with a cute raccoon mascot, soft pastel colors' },
-  { id: '3d-cafe', name: '3D Claymation Cafe', prompt: 'A 3D claymation style isometric cozy cafe interior with miniature people working on laptops' },
-  { id: 'flat-remote', name: 'Flat Vector Hand', prompt: 'Flat vector art of a hand holding the phone, abstract shapes in the background' }
+  { id: 'ref1-2d', name: '2D Playful Habit', image: '/references/ref1_2d.webp' },
+  { id: 'ref1-3d', name: '3D Clean Isometric', image: '/references/ref1_3d.webp' },
+  { id: 'ref2-2d', name: '2D App Store Standard', image: '/references/ref2_2d.webp' },
+  { id: 'ref2-3d', name: '3D Angled Mockup', image: '/references/ref2_3d.webp' },
+  { id: 'ref3-2d', name: '2D Minimal Light', image: '/references/ref3_2d.webp' },
+  { id: 'ref3-3d', name: '3D Claymation Dark', image: '/references/ref3_3d.webp' },
+  { id: 'ref4-2d', name: '2D Bright Vector', image: '/references/ref4_2d.webp' },
+  { id: 'ref4-3d', name: '3D Colorful Soft', image: '/references/ref4_3d.webp' },
+  { id: 'ref5-2d', name: '2D Sharp UI Focus', image: '/references/ref5_2d.webp' },
+  { id: 'ref5-3d', name: '3D Soft UI Focus', image: '/references/ref5_3d.webp' },
+  { id: 'ref6-3d', name: '3D Glassmorphism', image: '/references/ref6_3d.webp' },
 ];
 
 export default function StudioPage() {
@@ -20,10 +26,7 @@ export default function StudioPage() {
 
   // Phase 1: Uploads
   const [screenshots, setScreenshots] = useState<ScreenshotItem[]>([]);
-  const [referenceFile, setReferenceFile] = useState<File | null>(null);
-  const [referenceDataUrl, setReferenceDataUrl] = useState<string | null>(null);
-  const [selectedStyleId, setSelectedStyleId] = useState<string>('3d-fox');
-  const [customPrompt, setCustomPrompt] = useState<string>('');
+  const [selectedStyleId, setSelectedStyleId] = useState<string>(PRESET_STYLES[0].id);
 
   // Phase 2: Generation state
   const [generating, setGenerating] = useState(false);
@@ -61,19 +64,6 @@ export default function StudioPage() {
     setScreenshots((prev) => [...prev, ...newItems].slice(0, 10)); // Max 10
   };
 
-  const handleReferenceSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setReferenceFile(file);
-    const dataUrl = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target?.result as string);
-      reader.readAsDataURL(file);
-    });
-    setReferenceDataUrl(dataUrl);
-    setSelectedStyleId('custom');
-  };
-
   const handleGenerate = async () => {
     if (screenshots.length === 0) return;
     setGenerating(true);
@@ -90,19 +80,24 @@ export default function StudioPage() {
         };
       });
 
-      let refPayload = undefined;
-      if (referenceDataUrl) {
-        const parts = referenceDataUrl.split(',');
-        const mimeMatch = parts[0].match(/:(.*?);/);
-        refPayload = {
-          base64: parts[1],
-          mediaType: mimeMatch ? mimeMatch[1] : 'image/png'
-        };
-      }
+      // Load the selected reference image and convert to base64
+      const selectedStyle = PRESET_STYLES.find(s => s.id === selectedStyleId);
+      if (!selectedStyle) throw new Error("Style not found");
+      
+      const refResponse = await fetch(selectedStyle.image);
+      const refBlob = await refResponse.blob();
+      const refDataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.readAsDataURL(refBlob);
+      });
 
-      const stylePrompt = selectedStyleId === 'custom' 
-        ? customPrompt 
-        : PRESET_STYLES.find(s => s.id === selectedStyleId)?.prompt;
+      const refParts = refDataUrl.split(',');
+      const refMimeMatch = refParts[0].match(/:(.*?);/);
+      const refPayload = {
+        base64: refParts[1],
+        mediaType: refMimeMatch ? refMimeMatch[1] : 'image/webp'
+      };
 
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -110,7 +105,6 @@ export default function StudioPage() {
         body: JSON.stringify({ 
           images: imagesPayload,
           referenceImage: refPayload,
-          stylePrompt
         }),
       });
 
@@ -131,111 +125,20 @@ export default function StudioPage() {
       router.refresh();
     } catch (err: any) {
       setError(err.message);
-      // Optional: setHasGenerated(false) to kick them back, but let's keep them here to see the error.
     } finally {
       setGenerating(false);
     }
   };
 
-  const updateScreenshotText = (field: 'headline' | 'supporting', value: string) => {
-    setScreenshots(prev => prev.map((s, i) => i === selectedIndex ? { ...s, [field]: value } : s));
-  };
-
-  const generateCanvasBlob = async (screenshot: ScreenshotItem): Promise<Blob> => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const canvas = document.createElement('canvas');
-        const width = 1080;
-        const height = 1920; // 9:16 aspect ratio
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('No 2D context');
-        const scale = width / 400; // Relative to the 400px max-width container
-
-        // 1. Draw Background
-        const bgImg = new window.Image();
-        bgImg.crossOrigin = 'anonymous';
-        bgImg.src = screenshot.storage_path!;
-        await new Promise((r, err) => { bgImg.onload = r; bgImg.onerror = err; });
-        
-        const bgScale = Math.max(width / bgImg.width, height / bgImg.height);
-        const x = (width / 2) - (bgImg.width / 2) * bgScale;
-        const y = (height / 2) - (bgImg.height / 2) * bgScale;
-        ctx.drawImage(bgImg, x, y, bgImg.width * bgScale, bgImg.height * bgScale);
-
-        // 2. Draw Text (Headline & Supporting)
-        const textY = 120 * scale;
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#ffffff';
-        
-        const headline = screenshot.headline || '';
-        if (headline) {
-          ctx.font = `bold ${36 * scale}px sans-serif`;
-          ctx.shadowColor = 'rgba(0,0,0,0.3)';
-          ctx.shadowBlur = 10;
-          ctx.fillText(headline, width / 2, textY);
-        }
-
-        const supporting = screenshot.supporting || '';
-        if (supporting) {
-          ctx.font = `500 ${18 * scale}px sans-serif`;
-          ctx.shadowBlur = 8;
-          ctx.fillText(supporting, width / 2, textY + (32 * scale));
-        }
-        ctx.shadowColor = 'transparent';
-
-        // 3. Draw Flat Phone Frame
-        const frameW = width * 0.82;
-        const frameH = frameW * (19.5 / 9);
-        const frameX = (width - frameW) / 2;
-        // Position phone lower to make room for text
-        const frameY = height - frameH + (40 * scale); // crop slightly at the bottom
-        
-        // Flat white border, no massive shadows
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.roundRect(frameX, frameY, frameW, frameH, 40 * scale); 
-        ctx.fill();
-
-        // 4. Draw Screen (User UI)
-        const uiImg = new window.Image();
-        uiImg.crossOrigin = 'anonymous';
-        uiImg.src = screenshot.dataUrl!;
-        await new Promise((r, err) => { uiImg.onload = r; uiImg.onerror = err; });
-
-        const padding = 12 * scale;
-        const screenX = frameX + padding;
-        const screenY = frameY + padding;
-        const screenW = frameW - padding * 2;
-        const screenH = frameH - padding * 2;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(screenX, screenY, screenW, screenH, 32 * scale);
-        ctx.clip();
-        ctx.drawImage(uiImg, screenX, screenY, screenW, screenH);
-        ctx.restore();
-
-        // 5. Minimal Notch (Flat style)
-        const notchW = frameW * 0.35;
-        const notchH = 24 * scale;
-        const notchX = (width - notchW) / 2;
-        const notchY = screenY;
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.roundRect(notchX, notchY - (10 * scale), notchW, notchH + (10 * scale), 16 * scale);
-        ctx.fill();
-
-        canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('Canvas to blob failed'));
-        }, 'image/png');
-      } catch(e) {
-        reject(e);
-      }
-    });
+  const downloadImage = async (url: string, filename: string) => {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(blobUrl);
   };
 
   const handleDownloadSingle = async () => {
@@ -243,15 +146,7 @@ export default function StudioPage() {
     try {
       const current = screenshots[selectedIndex];
       if (!current.storage_path) return;
-      
-      const blob = await generateCanvasBlob(current);
-      const url = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `mockup-${current.position + 1}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await downloadImage(current.storage_path, `mockup-${current.position + 1}.png`);
     } catch (err) {
       console.error(err);
       setError('Failed to download');
@@ -267,7 +162,8 @@ export default function StudioPage() {
       
       for (const s of screenshots) {
         if (s.storage_path) {
-          const blob = await generateCanvasBlob(s);
+          const res = await fetch(s.storage_path);
+          const blob = await res.blob();
           zip.file(`mockup-${s.position + 1}.png`, blob);
         }
       }
@@ -361,10 +257,10 @@ export default function StudioPage() {
             <div style={{ width: '100%', maxWidth: 'var(--max-width)', display: 'flex', flexDirection: 'column', gap: '32px' }}>
               <div className="animate-fade-in">
                 <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '28px', fontWeight: 700, letterSpacing: '-1.5px', marginBottom: '5px' }}>
-                  Generate DALL-E Mockups
+                  Generate AI Mockups
                 </h1>
                 <p style={{ fontFamily: 'var(--font-body)', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                  Upload your UI screenshots, select a style, and AI will generate the full 3D composition.
+                  Upload your UI screenshots, select a reference style, and AI will generate a complete, pixel-perfect composition.
                 </p>
               </div>
 
@@ -387,59 +283,35 @@ export default function StudioPage() {
               {/* Style Selection Section */}
               <div className="animate-fade-in delay-75">
                 <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 600, marginBottom: '12px' }}>2. Choose a Reference Style</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
                   {PRESET_STYLES.map(style => (
                     <div 
                       key={style.id}
-                      onClick={() => { setSelectedStyleId(style.id); setReferenceDataUrl(null); }}
+                      onClick={() => setSelectedStyleId(style.id)}
                       style={{
-                        padding: '16px',
+                        padding: '12px',
                         borderRadius: '12px',
                         border: selectedStyleId === style.id ? '2px solid var(--accent)' : '1px solid var(--border-subtle)',
                         background: selectedStyleId === style.id ? 'var(--accent-tint)' : '#ffffff',
                         cursor: 'pointer',
-                        transition: 'all 0.2s'
+                        transition: 'all 0.2s',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '12px',
                       }}
                     >
-                      <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '8px', color: 'var(--text-primary)' }}>{style.name}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{style.prompt}</div>
+                      <div style={{ width: '100%', aspectRatio: '9/16', borderRadius: '8px', overflow: 'hidden', background: '#f4f4f5' }}>
+                        <img src={style.image} alt={style.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                      <div style={{ fontWeight: 600, fontSize: '13px', textAlign: 'center', color: 'var(--text-primary)' }}>{style.name}</div>
                     </div>
                   ))}
-                  
-                  <div 
-                    onClick={() => setSelectedStyleId('custom')}
-                    style={{
-                      padding: '16px',
-                      borderRadius: '12px',
-                      border: selectedStyleId === 'custom' ? '2px solid var(--accent)' : '1px solid var(--border-subtle)',
-                      background: selectedStyleId === 'custom' ? 'var(--accent-tint)' : '#ffffff',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '12px'
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>Upload Custom Style</div>
-                    {selectedStyleId === 'custom' && (
-                      <>
-                        <input type="file" accept="image/*" onChange={handleReferenceSelected} style={{ fontSize: '12px' }} />
-                        {referenceDataUrl && (
-                          <img src={referenceDataUrl} alt="Reference" style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '6px' }} />
-                        )}
-                        <textarea 
-                          placeholder="Describe the style (e.g. 3D cute fox)" 
-                          value={customPrompt}
-                          onChange={e => setCustomPrompt(e.target.value)}
-                          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-subtle)', fontSize: '12px', minHeight: '60px' }}
-                        />
-                      </>
-                    )}
-                  </div>
                 </div>
               </div>
 
               {screenshots.length > 0 && (
-                <div className="animate-slide-in-right">
+                <div className="animate-slide-in-right" style={{ paddingBottom: '64px' }}>
                   <button
                     onClick={handleGenerate}
                     disabled={generating}
@@ -508,58 +380,31 @@ export default function StudioPage() {
               })}
             </div>
 
-            {/* COLUMN 2: CENTER PREVIEW & EDITOR */}
+            {/* COLUMN 2: CENTER PREVIEW */}
             <div
               style={{
                 flex: 1,
                 display: 'flex',
-                alignItems: 'flex-start',
+                alignItems: 'center',
                 justifyContent: 'center',
                 padding: '32px',
                 background: 'var(--bg-base)',
                 overflowY: 'auto',
-                gap: '40px'
               }}
             >
-              {/* Canvas Preview Area */}
+              {/* Image Preview Area */}
               {screenshots[selectedIndex]?.storage_path ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%', maxWidth: '400px' }}>
-                  <div id={`mockup-composite-${selectedIndex}`} style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', aspectRatio: '9/16', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}>
-                    {/* Background Layer (OpenAI Generated) */}
+                  <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', aspectRatio: '9/16', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.1)' }}>
                     <img 
                       src={screenshots[selectedIndex].storage_path!} 
-                      alt="Background" 
-                      crossOrigin="anonymous"
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} 
+                      alt="Generated Mockup" 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                     />
-                    
-                    {/* Text Layer */}
-                    <div style={{ position: 'relative', zIndex: 20, textAlign: 'center', marginTop: '12%', padding: '0 20px', textShadow: '0px 2px 10px rgba(0,0,0,0.3)' }}>
-                      {screenshots[selectedIndex].headline && (
-                        <h2 style={{ color: '#fff', fontSize: '36px', fontWeight: 700, lineHeight: 1.1, margin: '0 0 8px 0', fontFamily: 'sans-serif' }}>
-                          {screenshots[selectedIndex].headline}
-                        </h2>
-                      )}
-                      {screenshots[selectedIndex].supporting && (
-                        <p style={{ color: '#fff', fontSize: '18px', fontWeight: 500, margin: 0, fontFamily: 'sans-serif' }}>
-                          {screenshots[selectedIndex].supporting}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Phone Frame Layer (Flat Design, Larger) */}
-                    <div style={{ position: 'relative', width: '82%', aspectRatio: '9/19.5', background: '#ffffff', borderRadius: '32px', padding: '12px', marginTop: 'auto', marginBottom: '-10%', zIndex: 10 }}>
-                       {/* Screen */}
-                       <div style={{ width: '100%', height: '100%', borderRadius: '22px', overflow: 'hidden', background: '#fff', position: 'relative' }}>
-                         <img src={screenshots[selectedIndex].dataUrl!} alt="UI" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                       </div>
-                       {/* Flat Notch */}
-                       <div style={{ position: 'absolute', top: '12px', left: '50%', transform: 'translateX(-50%)', width: '35%', height: '20px', background: '#ffffff', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }} />
-                    </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>
-                      Generated by OpenAI DALL-E 3
+                      Generated by OpenAI GPT-Image-2
                     </span>
                   </div>
                 </div>
@@ -576,43 +421,10 @@ export default function StudioPage() {
                     <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
                   </svg>
                   <div style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', fontWeight: 600 }}>
-                    Generating stunning mockups with OpenAI...
+                    Generating True AI Mockups...
                   </div>
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: '14px', color: 'var(--text-secondary)' }}>
-                    This usually takes about 15-30 seconds per image. Hang tight!
-                  </div>
-                </div>
-              )}
-
-              {/* Text Editor Sidebar */}
-              {screenshots[selectedIndex]?.storage_path && (
-                <div style={{ width: '300px', background: '#fff', borderRadius: '12px', padding: '24px', border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: '20px', flexShrink: 0 }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 600, margin: 0 }}>Edit Typography</h3>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)' }}>Headline</label>
-                    <input 
-                      type="text" 
-                      value={screenshots[selectedIndex].headline || ''} 
-                      onChange={(e) => updateScreenshotText('headline', e.target.value)}
-                      placeholder="e.g. Track Your Scores"
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', fontSize: '14px' }}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-secondary)' }}>Subline</label>
-                    <input 
-                      type="text" 
-                      value={screenshots[selectedIndex].supporting || ''} 
-                      onChange={(e) => updateScreenshotText('supporting', e.target.value)}
-                      placeholder="e.g. The #1 Cricket App"
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', fontSize: '14px' }}
-                    />
-                  </div>
-                  
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5, marginTop: '8px' }}>
-                    Changes apply instantly to the canvas. Download will capture these exact words perfectly.
+                    Passing reference style and screenshots to GPT-Image-2 Vision. Hang tight!
                   </div>
                 </div>
               )}

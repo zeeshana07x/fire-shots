@@ -73,57 +73,82 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to save batch' }, { status: 500 });
     }
 
-    // Process each image sequentially (to avoid rate limits or timeout, but Vercel limits to 60s)
-    // For production, this should ideally be asynchronous or use batch API.
+    const systemPrompt = `You are an expert App Store / Play Store screenshot designer operating gpt-image-2.
+
+You will receive:
+- One REFERENCE image: defines the illustration style, color palette, character
+  design, typography style, and panel layout to replicate.
+- Between 1 and 10 RAW SCREENSHOT images: real screenshots of the user's app,
+  each to be placed inside a phone mockup frame.
+- A metadata block describing app name, panel count, and per-panel captions.
+
+Your job: generate one cohesive multi-panel marketing screenshot SET, where
+every panel shares the same character(s), color palette, typography, and
+illustration style as the REFERENCE image, but each panel's phone frame
+displays the content from the corresponding RAW SCREENSHOT.
+
+Hard rules:
+1. NEVER redraw, distort, blur, or stylize the contents of the phone screen
+   itself. The screen content must remain crisp, accurate, and pixel-faithful
+   to the raw screenshot provided. Treat the screen area as a "window" — only
+   the background, characters, decorations, and headline text around the
+   phone may be illustrated/stylized.
+2. Maintain identical character design (face, outfit, color) across all
+   panels in the set. Do not let character appearance drift panel-to-panel.
+3. Maintain identical background color treatment, font family/weight for
+   headlines, and decorative motifs (stars, hearts, sparkles, etc.) across
+   all panels, matching the REFERENCE image's style.
+4. Each panel must include: a short headline (max 6 words), one supporting
+   line of subtext (max 10 words), and the phone mockup with the raw
+   screenshot inserted.
+5. Render all text with perfect spelling, high contrast, and no distortion.
+   Keep text blocks short — never invent additional UI text beyond what is
+   given in the metadata.
+6. Output panels in the same left-to-right order as the input screenshots.
+7. If a requested panel count exceeds what can be rendered with full
+   legibility, prioritize fewer, higher-quality panels over cramming.
+
+Do not add watermarks, logos, or placeholder text. Do not alter the aspect
+ratio away from the one specified in the metadata.`;
+
+    const content: any[] = [
+      { type: 'text', text: systemPrompt },
+    ];
+
+    if (referenceImage) {
+      content.push({ type: 'text', text: 'REFERENCE IMAGE:' });
+      content.push({
+        type: 'image_url',
+        image_url: { url: `data:${referenceImage.mediaType};base64,${referenceImage.base64}` }
+      });
+    }
+
+    content.push({ type: 'text', text: `RAW SCREENSHOT IMAGES (${images.length} panels):` });
+    images.forEach((img, index) => {
+       content.push({ type: 'text', text: `Screenshot ${index + 1}:` });
+       content.push({
+         type: 'image_url',
+         image_url: { url: `data:${img.mediaType};base64,${img.base64}` }
+       });
+    });
+
+    const imageResponse = await openai.images.generate({
+      model: "gpt-image-2",
+      prompt: content as any, // Passing the complex content array
+      n: images.length, // Generate as many images as there are screenshots in the batch
+      size: "1024x1792"
+    });
+
+    if (!imageResponse.data || imageResponse.data.length === 0) {
+      throw new Error("OpenAI returned an empty image response.");
+    }
+
     const generatedScreenshots = [];
-
-    for (let i = 0; i < images.length; i++) {
-      const img = images[i];
+    for (let i = 0; i < imageResponse.data.length; i++) {
+      const b64 = imageResponse.data[i].b64_json;
+      if (!b64) continue; // If an image failed, skip it
       
-      // Step 1: Use GPT-4o to write the DALL-E prompt
-      const content = [
-        { type: 'text', text: `You are an expert prompt engineer for DALL-E 3. We are generating a pure background for an App Store mockup. 
-          The user uploaded a screenshot of their app UI so you understand the app's context and color scheme.
-          ${stylePrompt ? `The user requested this specific style: "${stylePrompt}"` : 'Make it a highly stylized, modern 3D illustration.'}
-          Please write a highly detailed DALL-E 3 image generation prompt that describes the perfect, immersive background scene for this app.
-          CRITICAL: Do NOT mention placing a phone, a screen, or any UI elements in the prompt. The background should be completely empty of any devices, phones, or screens. We just want the beautiful 3D environment. Write ONLY the prompt, no introductory text.` },
-        {
-          type: 'image_url',
-          image_url: { url: `data:${img.mediaType};base64,${img.base64}` }
-        }
-      ];
-
-      if (referenceImage) {
-        content.push({ type: 'text', text: 'Use this reference image for the overall art style and layout:' });
-        content.push({
-          type: 'image_url',
-          image_url: { url: `data:${referenceImage.mediaType};base64,${referenceImage.base64}` }
-        });
-      }
-
-      const gptResponse = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [{ role: 'user', content: content as any }],
-        max_tokens: 500,
-      });
-
-      const imagePrompt = gptResponse.choices[0].message.content || 'A 3D mobile app store mockup...';
-
-      // Step 2: Call GPT Image 2
-      const imageResponse = await openai.images.generate({
-        model: "gpt-image-2",
-        prompt: imagePrompt,
-        n: 1,
-        size: "1024x1792" // GPT Image 2 supports vertical format
-      });
-
-      if (!imageResponse.data || imageResponse.data.length === 0) {
-        throw new Error("OpenAI returned an empty image response.");
-      }
-
-      const b64 = imageResponse.data[0].b64_json;
       const generatedUrl = `data:image/png;base64,${b64}`;
-
       generatedScreenshots.push({
         batch_id: batch.id,
         position: i,
@@ -131,7 +156,7 @@ export async function POST(req: NextRequest) {
         headline: '',
         supporting: '',
         icon: 'spark',
-        storage_path: generatedUrl // Store the data URL so the frontend can render it directly
+        storage_path: generatedUrl
       });
     }
 
