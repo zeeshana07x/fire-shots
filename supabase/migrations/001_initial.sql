@@ -39,10 +39,12 @@ CREATE TRIGGER on_auth_user_created
 
 -- ── Batches ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS batches (
-  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     UUID        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  palette     JSONB       NOT NULL DEFAULT '{}',
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       UUID        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  palette       JSONB       NOT NULL DEFAULT '{}',
+  status        TEXT        NOT NULL DEFAULT 'processing',
+  error_message TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 ALTER TABLE batches ENABLE ROW LEVEL SECURITY;

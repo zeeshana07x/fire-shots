@@ -33,6 +33,7 @@ export interface ScreenshotItem extends ScreenshotContent {
   // Persisted
   storageUrl?: string;
   storagePath?: string;
+  storage_path?: string;
 }
 
 export interface Batch {
