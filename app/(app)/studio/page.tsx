@@ -114,19 +114,46 @@ export default function StudioPage() {
         throw new Error(data.error || 'Failed to generate');
       }
 
-      setScreenshots((prev) =>
-        prev.map((s, i) => ({
-          ...s,
-          id: data.screenshots[i]?.id || s.id,
-          storage_path: data.screenshots[i]?.storage_path,
-        }))
-      );
-      setSelectedIndex(0);
-      router.refresh();
+      // Start polling for batch completion
+      const pollInterval = setInterval(async () => {
+        try {
+          const pollRes = await fetch(`/api/batches/${data.batchId}`);
+          const pollData = await pollRes.json();
+
+          if (!pollRes.ok) {
+            throw new Error(pollData.error || 'Failed to check status');
+          }
+
+          if (pollData.status === 'completed') {
+            clearInterval(pollInterval);
+            setScreenshots((prev) =>
+              prev.map((s, i) => ({
+                ...s,
+                id: pollData.screenshots[i]?.id || s.id,
+                storage_path: pollData.screenshots[i]?.storage_path,
+              }))
+            );
+            setSelectedIndex(0);
+            setGenerating(false);
+            router.refresh();
+          } else if (pollData.status === 'failed') {
+            clearInterval(pollInterval);
+            setError(pollData.errorMessage || 'Generation failed');
+            setGenerating(false);
+            setHasGenerated(false);
+          }
+        } catch (err: any) {
+          clearInterval(pollInterval);
+          setError(err.message);
+          setGenerating(false);
+          setHasGenerated(false);
+        }
+      }, 2000);
+
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setGenerating(false);
+      setHasGenerated(false);
     }
   };
 
@@ -364,15 +391,10 @@ export default function StudioPage() {
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                     ) : (
-                      <div style={{ position: 'relative', width: '100%', height: '100%', background: '#e2e2ea' }}>
+                      <div style={{ position: 'relative', width: '100%', height: '100%', background: '#f4f4f5' }}>
                         {s.dataUrl && (
-                           <img src={s.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3 }} />
+                           <img src={s.dataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.4 }} />
                         )}
-                        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                           <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-                           </svg>
-                        </div>
                       </div>
                     )}
                   </button>
