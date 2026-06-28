@@ -122,20 +122,25 @@ async function splitIntoPanels(
 
 function buildPrompt(
   images: { base64: string; mediaType: string }[],
-  stylePrompt?: string,
+  styleType: '2D' | '3D',
 ) {
   const panelWord = images.length === 1 ? 'panel' : 'panels';
   const panelCountSpelled = images.length;
 
-  const systemPrompt = `You are an expert App Store / Play Store screenshot designer.
+  const systemPrompt = `You are an expert App Store / Play Store screenshot designer operating gpt-image-2.
 
 You will receive a REFERENCE image first, followed by exactly ${panelCountSpelled}
 RAW SCREENSHOT image(s) of the user's app.
 
+Your job: generate one cohesive multi-panel marketing screenshot SET in a premium, beautiful ${styleType} illustration style, where
+every panel shares the same character(s), color palette, typography, and
+${styleType} illustration style as the REFERENCE image, but each panel's phone frame
+displays the content from the corresponding RAW SCREENSHOT.
+
 === PANEL COUNT — READ THIS FIRST ===
 The REFERENCE image may visually show a different number of panels than what
 you are asked to generate. IGNORE the REFERENCE image's panel count entirely.
-The REFERENCE image is a STYLE GUIDE ONLY — copy its illustration style,
+The REFERENCE image is a STYLE GUIDE ONLY — copy its ${styleType} illustration style,
 color palette, character design, and typography, but NOT its layout, grid,
 or number of panels.
 
@@ -143,12 +148,7 @@ The ONLY thing that determines how many panels you output is the number of
 RAW SCREENSHOT images provided. Exactly ${panelCountSpelled} RAW SCREENSHOT
 image(s) were provided, so you must generate EXACTLY ${panelCountSpelled}
 ${panelWord}. Not more, not fewer.
-${images.length === 1 ? `
-This means: generate a SINGLE phone mockup with ONE headline and ONE
-supporting line of subtext. Do NOT split the canvas into multiple frames.
-Do NOT repeat or duplicate the screenshot side-by-side. Do NOT imitate a
-multi-panel grid just because the REFERENCE image has one. There is only
-one screenshot, so there is only one panel, period.` : `
+
 This means: generate exactly ${panelCountSpelled} ${panelWord} side-by-side,
 one per RAW SCREENSHOT, in the same left-to-right order they were provided
 (panel 1 = screenshot 1, panel 2 = screenshot 2, etc). Do NOT add extra
@@ -162,32 +162,28 @@ ${images.map((_, i) => `  - Panel ${i + 1} must display the content of RAW SCREE
 
 Before finalizing, verify: does the output contain exactly ${panelCountSpelled}
 panels, with each panel showing the correct screenshot from the list above,
-in the correct position? If not, fix it before returning the result.`}
+in the correct position? If not, fix it before returning the result.
 === END PANEL COUNT ===
 
 === STYLE vs. SUBJECT MATTER — DO NOT CONFUSE THESE ===
-The REFERENCE image teaches you an ILLUSTRATION STYLE: line weight, shading
-technique, roundness, typography, and overall illustration mood. It is NOT
-a library of assets to copy, and it is NOT your color source (colors come
-from the RAW SCREENSHOT's own app branding instead — see the COLOR SOURCE
-rule below). The reference's own colors should be ignored entirely.
+The REFERENCE image teaches you a STYLE: line weight, shading technique,
+color palette, roundness, typography, and overall ${styleType} illustration mood. It is
+NOT a library of assets to copy.
 
 Do NOT reuse the REFERENCE image's specific mascot, character, animal,
 plant, or any named decorative prop (for example: if the REFERENCE shows a
 cactus character, a wooden sign, or a trophy icon, do NOT draw that same
 cactus, sign, or trophy in your output). Copying the reference's specific
-character or props is WRONG even if the line style matches.
+character or props is WRONG even if the colors and line style match.
 
 Instead, INVENT a new, original character and new decorative props that:
-- Match the REFERENCE's illustration STYLE (rounded shapes, shading, line
-  weight, typography) — yes, copy the style. Do NOT match its colors.
+- Match the REFERENCE's ${styleType} illustration STYLE (rounded shapes, color palette,
+  shading, line weight, typography) — yes, copy the style.
 - Are thematically relevant to the app shown in the RAW SCREENSHOT(s)
   instead of the reference's subject (for example, for a cricket scoring
   app, consider a cricket bat, ball, trophy, or a friendly sports-themed
   mascot — not a cactus, not a habit-tracker plant, not anything specific
   to what the reference happened to depict).
-- Are colored using the app-derived palette described in the COLOR SOURCE
-  rule below, not the reference's colors.
 - Stay completely original — do not trace, copy, or closely imitate the
   reference's specific drawn subject in any panel.
 === END STYLE vs. SUBJECT MATTER ===
@@ -202,11 +198,6 @@ Hard rules:
    copied from the REFERENCE image) and keep its face, outfit, and color
    IDENTICAL across all ${panelWord} in this set. Do not let it drift
    panel-to-panel, and do not let it resemble the REFERENCE's own character.
-3. COLOR SOURCE: do NOT copy the REFERENCE image's color palette. Instead,
-   derive the color palette from the RAW SCREENSHOT(s) themselves — look at
-   the app's own branding (primary buttons, header bars, accent colors,
-   highlighted text, icons) visible in the screenshot(s) and use THOSE
-   colors for the panel background, headline text, and decorative motifs.
    If multiple screenshots show different accent colors, pick the most
    frequently recurring one as the primary palette, and keep that SAME
    app-derived palette consistent across all ${panelWord} in this set
@@ -266,9 +257,7 @@ Text block:
   thinner-weight rendering.
 === END LAYOUT / COMPOSITION ===`;
 
-  return stylePrompt
-    ? `${systemPrompt}\n\nAdditional style direction from the user: ${stylePrompt}`
-    : systemPrompt;
+  return systemPrompt;
 }
 
 // The actual long-running work: calls OpenAI, then updates the batch row.
@@ -278,18 +267,18 @@ async function runGeneration({
   userId,
   images,
   referenceImage,
-  stylePrompt,
+  styleType,
 }: {
   batchId: string;
   userId: string;
   images: { base64: string; mediaType: string }[];
   referenceImage?: { base64: string; mediaType: string };
-  stylePrompt?: string;
+  styleType: '2D' | '3D';
 }) {
   const supabase = await createClient();
 
   try {
-    const userPrompt = buildPrompt(images, stylePrompt);
+    const userPrompt = buildPrompt(images, styleType);
 
     const imageFiles = [];
     if (referenceImage) {
@@ -305,7 +294,7 @@ async function runGeneration({
       model: 'gpt-image-2',
       image: imageFiles,
       prompt: userPrompt,
-      quality: 'low', // bump once validated
+      quality: 'medium',
       size: `${width}x${height}`,
     });
 
@@ -376,10 +365,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { images, referenceImage, stylePrompt } = body as {
+    const { images, referenceImage, styleType } = body as {
       images: { base64: string; mediaType: string }[];
       referenceImage?: { base64: string; mediaType: string };
-      stylePrompt?: string;
+      styleType: '2D' | '3D';
     };
 
     if (!images || !Array.isArray(images) || images.length === 0) {
@@ -422,16 +411,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to save batch' }, { status: 500 });
     }
 
-    // Schedule the actual generation to run after this response is sent.
-    // The HTTP response below returns almost immediately; runGeneration()
-    // keeps executing in the background up to maxDuration.
     after(() =>
       runGeneration({
         batchId: batch.id,
         userId: user.id,
         images,
         referenceImage,
-        stylePrompt,
+        styleType,
       })
     );
 

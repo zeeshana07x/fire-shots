@@ -9,17 +9,18 @@ import UploadZone from '@/components/studio/UploadZone';
 import { createClient } from '@/lib/supabase/client';
 
 const PRESET_STYLES = [
-  { id: 'ref1-2d', name: '2D Playful Habit', image: '/references/ref1_2d.webp' },
-  { id: 'ref1-3d', name: '3D Clean Isometric', image: '/references/ref1_3d.webp' },
-  { id: 'ref2-2d', name: '2D App Store Standard', image: '/references/ref2_2d.webp' },
-  { id: 'ref2-3d', name: '3D Angled Mockup', image: '/references/ref2_3d.webp' },
-  { id: 'ref3-2d', name: '2D Minimal Light', image: '/references/ref3_2d.webp' },
-  { id: 'ref3-3d', name: '3D Claymation Dark', image: '/references/ref3_3d.webp' },
-  { id: 'ref4-2d', name: '2D Bright Vector', image: '/references/ref4_2d.webp' },
-  { id: 'ref4-3d', name: '3D Colorful Soft', image: '/references/ref4_3d.webp' },
-  { id: 'ref5-2d', name: '2D Sharp UI Focus', image: '/references/ref5_2d.webp' },
-  { id: 'ref5-3d', name: '3D Soft UI Focus', image: '/references/ref5_3d.webp' },
-  { id: 'ref6-3d', name: '3D Glassmorphism', image: '/references/ref6_3d.webp' },
+  { id: 'ref1-2d', name: 'Playful Habit', image: '/references/ref1_2d.webp', type: '2D' },
+  { id: 'ref2-2d', name: 'App Store Standard', image: '/references/ref2_2d.webp', type: '2D' },
+  { id: 'ref3-2d', name: 'Minimal Light', image: '/references/ref3_2d.webp', type: '2D' },
+  { id: 'ref4-2d', name: 'Bright Vector', image: '/references/ref4_2d.webp', type: '2D' },
+  { id: 'ref5-2d', name: 'Sharp UI Focus', image: '/references/ref5_2d.webp', type: '2D' },
+  
+  { id: 'ref1-3d', name: 'Clean Isometric', image: '/references/ref1_3d.webp', type: '3D' },
+  { id: 'ref2-3d', name: 'Angled Mockup', image: '/references/ref2_3d.webp', type: '3D' },
+  { id: 'ref3-3d', name: 'Claymation Dark', image: '/references/ref3_3d.webp', type: '3D' },
+  { id: 'ref4-3d', name: 'Colorful Soft', image: '/references/ref4_3d.webp', type: '3D' },
+  { id: 'ref5-3d', name: 'Soft UI Focus', image: '/references/ref5_3d.webp', type: '3D' },
+  { id: 'ref6-3d', name: 'Glassmorphism', image: '/references/ref6_3d.webp', type: '3D' },
 ];
 
 const LOADING_STEPS = [
@@ -38,17 +39,29 @@ export default function StudioPage() {
 
   // Phase 1: Uploads
   const [screenshots, setScreenshots] = useState<ScreenshotItem[]>([]);
-  const [selectedStyleId, setSelectedStyleId] = useState<string>(PRESET_STYLES[0].id);
+  const [styleType, setStyleType] = useState<'2D' | '3D'>('3D');
+  const [selectedStyleId, setSelectedStyleId] = useState<string>('ref1-3d');
 
   // Phase 2: Generation state
   const [generating, setGenerating] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loadingStep, setLoadingStep] = useState(0);
+  const [progress, setProgress] = useState(0);
 
   // Phase 3: Download state
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasGenerated, setHasGenerated] = useState(false);
+  const [step, setStep] = useState<'upload' | 'style' | 'view'>('upload');
+
+  const filteredStyles = PRESET_STYLES.filter(s => s.type === styleType);
+
+  // Auto-select first style of the chosen dimension when it changes
+  useEffect(() => {
+    const firstStyle = PRESET_STYLES.find(s => s.type === styleType);
+    if (firstStyle) {
+      setSelectedStyleId(firstStyle.id);
+    }
+  }, [styleType]);
 
   // Cycle loading steps when generating
   useEffect(() => {
@@ -56,6 +69,25 @@ export default function StudioPage() {
     const interval = setInterval(() => {
       setLoadingStep((prev) => (prev + 1) % LOADING_STEPS.length);
     }, 4000);
+    return () => clearInterval(interval);
+  }, [generating]);
+
+  // Smooth fluid progress bar (creeps to 95% over 25 seconds, never reverses)
+  useEffect(() => {
+    if (!generating) {
+      setProgress(0);
+      return;
+    }
+    const startTime = Date.now();
+    const duration = 25000; // 25 seconds
+
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      // Smooth asymptotic curve or simple linear cap at 95%
+      const percentage = Math.min(95, Math.floor((elapsed / duration) * 95));
+      setProgress(percentage);
+    }, 100);
+
     return () => clearInterval(interval);
   }, [generating]);
 
@@ -96,11 +128,11 @@ export default function StudioPage() {
               dataUrl: s.storage_path,
             })));
             setSelectedIndex(0);
-            setHasGenerated(true);
+            setStep('view');
           }
         } else if (batch.status === 'processing') {
           setGenerating(true);
-          setHasGenerated(true);
+          setStep('view');
           
           const pollInterval = setInterval(async () => {
             const { data: b } = await supabase
@@ -135,7 +167,7 @@ export default function StudioPage() {
               clearInterval(pollInterval);
               setError(b.error_message || 'Generation failed');
               setGenerating(false);
-              setHasGenerated(false);
+              setStep('style');
             }
           }, 2000);
         } else if (batch.status === 'failed') {
@@ -179,7 +211,7 @@ export default function StudioPage() {
   const handleGenerate = async () => {
     if (screenshots.length === 0) return;
     setGenerating(true);
-    setHasGenerated(true); // Transition immediately to view mode with loaders
+    setStep('view'); // Transition immediately to view mode with loaders
     setError(null);
 
     try {
@@ -217,6 +249,7 @@ export default function StudioPage() {
         body: JSON.stringify({ 
           images: imagesPayload,
           referenceImage: refPayload,
+          styleType,
         }),
       });
 
@@ -252,20 +285,20 @@ export default function StudioPage() {
             clearInterval(pollInterval);
             setError(pollData.errorMessage || 'Generation failed');
             setGenerating(false);
-            setHasGenerated(false);
+            setStep('style');
           }
         } catch (err: any) {
           clearInterval(pollInterval);
           setError(err.message);
           setGenerating(false);
-          setHasGenerated(false);
+          setStep('style');
         }
       }, 2000);
 
     } catch (err: any) {
       setError(err.message);
       setGenerating(false);
-      setHasGenerated(false);
+      setStep('style');
     }
   };
 
@@ -322,14 +355,41 @@ export default function StudioPage() {
     }
   };
 
-  const phase = hasGenerated ? 'view' : 'upload';
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
       
       {/* --- HEADER --- */}
-      {phase === 'upload' ? (
+      {step === 'upload' ? (
         <AppNav credits={150} userEmail="user@example.com" />
+      ) : step === 'style' ? (
+        <header
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 24px',
+            height: '56px',
+            background: '#ffffff',
+            borderBottom: '1px solid var(--border-subtle)',
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={() => setStep('upload')}
+            className="btn btn-secondary btn-sm"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontWeight: 600,
+              color: 'var(--text-secondary)',
+            }}
+          >
+            ← Back to Upload
+          </button>
+          <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-secondary)' }}>Step 2: Choose Reference & Dimension</span>
+          <div style={{ width: '80px' }} /> {/* Spacing */}
+        </header>
       ) : (
         <header
           style={{
@@ -345,8 +405,9 @@ export default function StudioPage() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <button
-              onClick={() => setHasGenerated(false)}
+              onClick={() => setStep('style')}
               className="btn btn-secondary btn-sm"
+              disabled={generating}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -360,7 +421,7 @@ export default function StudioPage() {
                 <line x1="19" y1="12" x2="5" y2="12" />
                 <polyline points="12 19 5 12 12 5" />
               </svg>
-              Back to Studio
+              Back to Styles
             </button>
           </div>
 
@@ -391,7 +452,7 @@ export default function StudioPage() {
           </div>
         )}
 
-        {phase === 'upload' ? (
+        {step === 'upload' ? (
           <div style={{ height: '100%', overflowY: 'auto', padding: '48px 24px', display: 'flex', justifyContent: 'center' }}>
             <div style={{ width: '100%', maxWidth: 'var(--max-width)', display: 'flex', flexDirection: 'column', gap: '32px' }}>
               <div className="animate-fade-in">
@@ -399,7 +460,7 @@ export default function StudioPage() {
                   Generate AI Mockups
                 </h1>
                 <p style={{ fontFamily: 'var(--font-body)', color: 'var(--text-secondary)', fontSize: '14px' }}>
-                  Upload your UI screenshots, select a reference style, and AI will generate a complete, pixel-perfect composition.
+                  Upload your UI screenshots to get started. In the next step, you'll choose your mockup style.
                 </p>
               </div>
 
@@ -419,48 +480,98 @@ export default function StudioPage() {
                 )}
               </div>
 
-              {/* Style Selection Section */}
-              <div className="animate-fade-in delay-75">
-                <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 600, marginBottom: '12px' }}>2. Choose a Reference Style</h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-                  {PRESET_STYLES.map(style => (
-                    <div 
-                      key={style.id}
-                      onClick={() => setSelectedStyleId(style.id)}
-                      style={{
-                        padding: '12px',
-                        borderRadius: '12px',
-                        border: selectedStyleId === style.id ? '2px solid var(--accent)' : '1px solid var(--border-subtle)',
-                        background: selectedStyleId === style.id ? 'var(--accent-tint)' : '#ffffff',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        gap: '12px',
-                      }}
-                    >
-                      <div style={{ width: '100%', aspectRatio: '9/16', borderRadius: '8px', overflow: 'hidden', background: '#f4f4f5' }}>
-                        <img src={style.image} alt={style.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </div>
-                      <div style={{ fontWeight: 600, fontSize: '13px', textAlign: 'center', color: 'var(--text-primary)' }}>{style.name}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               {screenshots.length > 0 && (
-                <div className="animate-slide-in-right" style={{ paddingBottom: '64px' }}>
+                <div className="animate-slide-in-right">
                   <button
-                    onClick={handleGenerate}
-                    disabled={generating}
+                    onClick={() => setStep('style')}
                     className="btn btn-primary btn-lg"
                     style={{ width: '100%', justifyContent: 'center' }}
                   >
-                    {generating ? 'Starting...' : `Generate ${screenshots.length} Final Image${screenshots.length !== 1 ? 's' : ''}`}
+                    Next: Choose Style & Dimension →
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        ) : step === 'style' ? (
+          <div style={{ height: '100%', overflowY: 'auto', padding: '48px 24px', display: 'flex', justifyContent: 'center' }}>
+            <div style={{ width: '100%', maxWidth: 'var(--max-width)', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              <div className="animate-fade-in">
+                <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: '28px', fontWeight: 700, letterSpacing: '-1.5px', marginBottom: '5px' }}>
+                  Choose Your Design Style
+                </h1>
+                <p style={{ fontFamily: 'var(--font-body)', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                  Select whether you want a 2D or 3D look, and choose a reference image.
+                </p>
+              </div>
+
+              <div className="animate-fade-in delay-75" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <div>
+                  <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 600, marginBottom: '12px' }}>2. Choose Style Dimension</h2>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    {(['3D', '2D'] as const).map(type => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setStyleType(type)}
+                        style={{
+                          padding: '10px 24px',
+                          borderRadius: '8px',
+                          border: styleType === type ? '2px solid var(--accent)' : '1px solid var(--border-subtle)',
+                          background: styleType === type ? 'var(--accent-tint)' : '#ffffff',
+                          color: styleType === type ? 'var(--accent-hover)' : 'var(--text-secondary)',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          fontSize: '14px',
+                        }}
+                      >
+                        {type} Illustration
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '16px', fontWeight: 600, marginBottom: '12px' }}>3. Choose a Reference Style</h2>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+                    {filteredStyles.map(style => (
+                      <div 
+                        key={style.id}
+                        onClick={() => setSelectedStyleId(style.id)}
+                        style={{
+                          padding: '12px',
+                          borderRadius: '12px',
+                          border: selectedStyleId === style.id ? '2px solid var(--accent)' : '1px solid var(--border-subtle)',
+                          background: selectedStyleId === style.id ? 'var(--accent-tint)' : '#ffffff',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '12px',
+                        }}
+                      >
+                        <div style={{ width: '100%', aspectRatio: '9/16', borderRadius: '8px', overflow: 'hidden', background: '#f4f4f5' }}>
+                          <img src={style.image} alt={style.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                        <div style={{ fontWeight: 600, fontSize: '13px', textAlign: 'center', color: 'var(--text-primary)' }}>{style.name}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="animate-slide-in-right" style={{ paddingBottom: '64px' }}>
+                <button
+                  onClick={handleGenerate}
+                  disabled={generating}
+                  className="btn btn-primary btn-lg"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  {generating ? 'Starting...' : `Generate ${screenshots.length} Final Image${screenshots.length !== 1 ? 's' : ''}`}
+                </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -631,18 +742,29 @@ export default function StudioPage() {
                     {/* Simple progress bar */}
                     <div style={{
                       width: '100%',
-                      height: '6px',
-                      background: 'rgba(0,0,0,0.05)',
-                      borderRadius: '3px',
-                      overflow: 'hidden'
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                      alignItems: 'center'
                     }}>
                       <div style={{
-                        width: `${((loadingStep + 1) / LOADING_STEPS.length) * 100}%`,
-                        height: '100%',
-                        background: 'linear-gradient(90deg, var(--accent) 0%, #10b981 100%)',
+                        width: '100%',
+                        height: '6px',
+                        background: 'rgba(0,0,0,0.05)',
                         borderRadius: '3px',
-                        transition: 'width 0.8s cubic-bezier(0.4, 0, 0.2, 1)'
-                      }} />
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{
+                          width: `${progress}%`,
+                          height: '100%',
+                          background: 'linear-gradient(90deg, var(--accent) 0%, #10b981 100%)',
+                          borderRadius: '3px',
+                          transition: 'width 0.2s linear'
+                        }} />
+                      </div>
+                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>
+                        This could take 20-30 seconds. Please do not close this page.
+                      </span>
                     </div>
                   </div>
                 </div>
