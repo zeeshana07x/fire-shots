@@ -1,6 +1,10 @@
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/server';
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <div style={{ minHeight: '100vh', background: '#ffffff', overflowX: 'hidden' }}>
 
@@ -42,12 +46,20 @@ export default function LandingPage() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Link href="/login" className="btn btn-ghost" style={{ padding: '10px 20px', fontSize: '15px' }}>
-            Log in
-          </Link>
-          <Link href="/signup" className="btn btn-primary" style={{ padding: '10px 20px', fontSize: '15px' }}>
-            Get started
-          </Link>
+          {user ? (
+            <Link href="/dashboard" className="btn btn-primary" style={{ padding: '10px 20px', fontSize: '15px' }}>
+              Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link href="/login" className="btn btn-ghost" style={{ padding: '10px 20px', fontSize: '15px' }}>
+                Log in
+              </Link>
+              <Link href="/signup" className="btn btn-primary" style={{ padding: '10px 20px', fontSize: '15px' }}>
+                Get started
+              </Link>
+            </>
+          )}
         </div>
       </nav>
 
@@ -109,9 +121,15 @@ export default function LandingPage() {
 
         {/* CTAs */}
         <div className="animate-fade-in delay-225" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
-          <Link href="/signup" className="btn btn-primary btn-lg" style={{ padding: '16px 32px', fontSize: '16px' }}>
-            Start now →
-          </Link>
+          {user ? (
+            <Link href="/dashboard" className="btn btn-primary btn-lg" style={{ padding: '16px 32px', fontSize: '16px' }}>
+              Go to Dashboard →
+            </Link>
+          ) : (
+            <Link href="/signup" className="btn btn-primary btn-lg" style={{ padding: '16px 32px', fontSize: '16px' }}>
+              Start now →
+            </Link>
+          )}
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '32px', color: 'var(--text-muted)', fontSize: '14px', fontFamily: 'var(--font-body)' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

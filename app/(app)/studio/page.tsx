@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import JSZip from 'jszip';
 import { ScreenshotItem } from '@/lib/types';
 import AppNav from '@/components/layout/AppNav';
 import UploadZone from '@/components/studio/UploadZone';
+import { createClient } from '@/lib/supabase/client';
 
 const PRESET_STYLES = [
   { id: 'ref1-2d', name: '2D Playful Habit', image: '/references/ref1_2d.webp' },
@@ -21,8 +22,19 @@ const PRESET_STYLES = [
   { id: 'ref6-3d', name: '3D Glassmorphism', image: '/references/ref6_3d.webp' },
 ];
 
+const LOADING_STEPS = [
+  "Analyzing your screenshots...",
+  "Matching colors and typography with your chosen style...",
+  "Generating custom 3D background elements...",
+  "Positioning your screens inside mockups...",
+  "Applying final lighting and rendering details...",
+  "Almost there! Preparing your high-res files..."
+];
+
 export default function StudioPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const batchId = searchParams.get('batch');
 
   // Phase 1: Uploads
   const [screenshots, setScreenshots] = useState<ScreenshotItem[]>([]);
@@ -31,11 +43,111 @@ export default function StudioPage() {
   // Phase 2: Generation state
   const [generating, setGenerating] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [loadingStep, setLoadingStep] = useState(0);
 
   // Phase 3: Download state
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasGenerated, setHasGenerated] = useState(false);
+
+  // Cycle loading steps when generating
+  useEffect(() => {
+    if (!generating) return;
+    const interval = setInterval(() => {
+      setLoadingStep((prev) => (prev + 1) % LOADING_STEPS.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [generating]);
+
+  // Load previous batch or poll if processing
+  useEffect(() => {
+    if (!batchId) return;
+
+    const checkBatchStatus = async () => {
+      try {
+        const supabase = createClient();
+        const { data: batch, error: batchError } = await supabase
+          .from('batches')
+          .select('*')
+          .eq('id', batchId)
+          .single();
+
+        if (batchError || !batch) {
+          setError('Batch not found');
+          return;
+        }
+
+        if (batch.status === 'completed') {
+          const { data: ss, error: ssError } = await supabase
+            .from('screenshots')
+            .select('*')
+            .eq('batch_id', batchId)
+            .order('position', { ascending: true });
+
+          if (!ssError && ss) {
+            setScreenshots(ss.map(s => ({
+              id: s.id,
+              position: s.position,
+              eyebrow: s.eyebrow,
+              headline: s.headline,
+              supporting: s.supporting,
+              icon: s.icon as any,
+              storage_path: s.storage_path,
+              dataUrl: s.storage_path,
+            })));
+            setSelectedIndex(0);
+            setHasGenerated(true);
+          }
+        } else if (batch.status === 'processing') {
+          setGenerating(true);
+          setHasGenerated(true);
+          
+          const pollInterval = setInterval(async () => {
+            const { data: b } = await supabase
+              .from('batches')
+              .select('*')
+              .eq('id', batchId)
+              .single();
+
+            if (b && b.status === 'completed') {
+              clearInterval(pollInterval);
+              const { data: ss } = await supabase
+                .from('screenshots')
+                .select('*')
+                .eq('batch_id', batchId)
+                .order('position', { ascending: true });
+              
+              if (ss) {
+                setScreenshots(ss.map(s => ({
+                  id: s.id,
+                  position: s.position,
+                  eyebrow: s.eyebrow,
+                  headline: s.headline,
+                  supporting: s.supporting,
+                  icon: s.icon as any,
+                  storage_path: s.storage_path,
+                  dataUrl: s.storage_path,
+                })));
+                setSelectedIndex(0);
+                setGenerating(false);
+              }
+            } else if (b && b.status === 'failed') {
+              clearInterval(pollInterval);
+              setError(b.error_message || 'Generation failed');
+              setGenerating(false);
+              setHasGenerated(false);
+            }
+          }, 2000);
+        } else if (batch.status === 'failed') {
+          setError(batch.error_message || 'Generation failed');
+        }
+      } catch (err: any) {
+        setError(err.message);
+      }
+    };
+
+    checkBatchStatus();
+  }, [batchId]);
 
   const handleFilesSelected = async (files: File[]) => {
     setError(null);
@@ -426,27 +538,112 @@ export default function StudioPage() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontFamily: 'var(--font-body)', fontSize: '13px', color: 'var(--text-muted)', fontWeight: 500 }}>
-                      Generated by OpenAI GPT-Image-2
+                      Generated by Fireshots AI
                     </span>
                   </div>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '24px' }}>
-                  <svg className="animate-spin" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="2" x2="12" y2="6"></line>
-                    <line x1="12" y1="18" x2="12" y2="22"></line>
-                    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
-                    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
-                    <line x1="2" y1="12" x2="6" y2="12"></line>
-                    <line x1="18" y1="12" x2="22" y2="12"></line>
-                    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
-                    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
-                  </svg>
-                  <div style={{ fontFamily: 'var(--font-heading)', fontSize: '18px', fontWeight: 600 }}>
-                    Generating True AI Mockups...
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '14px', color: 'var(--text-secondary)' }}>
-                    Passing reference style and screenshots to GPT-Image-2 Vision. Hang tight!
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  height: '100%', 
+                  width: '100%',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  {/* Glowing background blobs */}
+                  <div style={{
+                    position: 'absolute',
+                    width: '300px',
+                    height: '300px',
+                    background: 'radial-gradient(circle, var(--accent-tint) 0%, rgba(255,255,255,0) 70%)',
+                    top: '20%',
+                    left: '20%',
+                    filter: 'blur(60px)',
+                    animation: 'float-slow 10s infinite alternate',
+                    zIndex: 1
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    width: '300px',
+                    height: '300px',
+                    background: 'radial-gradient(circle, rgba(16,185,129,0.1) 0%, rgba(255,255,255,0) 70%)',
+                    bottom: '20%',
+                    right: '20%',
+                    filter: 'blur(60px)',
+                    animation: 'float-slow 12s infinite alternate-reverse',
+                    zIndex: 1
+                  }} />
+
+                  {/* Glassmorphic Card */}
+                  <div style={{
+                    position: 'relative',
+                    zIndex: 10,
+                    background: 'rgba(255, 255, 255, 0.7)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(255, 255, 255, 0.6)',
+                    borderRadius: '24px',
+                    padding: '48px 32px',
+                    width: '100%',
+                    maxWidth: '440px',
+                    boxShadow: '0 30px 60px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    textAlign: 'center',
+                    gap: '28px'
+                  }}>
+                    {/* Premium Morphing Loader */}
+                    <div style={{
+                      width: '64px',
+                      height: '64px',
+                      background: 'linear-gradient(135deg, var(--accent) 0%, #10b981 100%)',
+                      borderRadius: '16px',
+                      animation: 'morph-rotate 3s infinite ease-in-out',
+                      boxShadow: '0 10px 25px rgba(16,185,129,0.25)'
+                    }} />
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <h3 style={{ 
+                        fontFamily: 'var(--font-heading)', 
+                        fontSize: '22px', 
+                        fontWeight: 700, 
+                        letterSpacing: '-0.5px',
+                        color: 'var(--text-primary)',
+                        margin: 0
+                      }}>
+                        Designing Your Mockups
+                      </h3>
+                      <p style={{ 
+                        fontFamily: 'var(--font-body)', 
+                        fontSize: '14px', 
+                        color: 'var(--text-secondary)',
+                        minHeight: '40px',
+                        margin: 0,
+                        transition: 'all 0.3s ease'
+                      }}>
+                        {LOADING_STEPS[loadingStep]}
+                      </p>
+                    </div>
+
+                    {/* Simple progress bar */}
+                    <div style={{
+                      width: '100%',
+                      height: '6px',
+                      background: 'rgba(0,0,0,0.05)',
+                      borderRadius: '3px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${((loadingStep + 1) / LOADING_STEPS.length) * 100}%`,
+                        height: '100%',
+                        background: 'linear-gradient(90deg, var(--accent) 0%, #10b981 100%)',
+                        borderRadius: '3px',
+                        transition: 'width 0.8s cubic-bezier(0.4, 0, 0.2, 1)'
+                      }} />
+                    </div>
                   </div>
                 </div>
               )}

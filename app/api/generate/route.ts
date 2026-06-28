@@ -32,13 +32,25 @@ async function toOpenAIFile(
 // ratio between 1:3 and 3:1, max dimension 3840x2160 (above 2560x1440 is
 // "experimental").
 //
-// Per-panel target is ~2:3 (portrait phone-like). We widen the canvas as
-// panel count grows, but cap it so we never cross the 1:3–3:1 aspect ratio
-// limit or the max resolution — past that cap, panels start getting
-// genuinely squeezed again, which is the point at which splitting the
-// batch into multiple calls (see chat) becomes the better move.
+// Verified output for panel counts 1-4 (the common cases):
+//   1 panel:  1024x1536 canvas → 1 panel at 1024x1536 (clean 2:3 phone ratio)
+//   2 panels: 2048x1536 canvas → 2 panels at 1024x1536 each (clean)
+//   3 panels: 3072x1536 canvas → 3 panels at 1024x1536 each (clean)
+//   4 panels: 3840x1536 canvas → 4 panels at  960x1536 each (slightly
+//             narrower than the others — this is the API's max-resolution
+//             ceiling being hit, not a bug. Above 4 panels this same cap
+//             means panels keep getting narrower; there's no way to avoid
+//             that within a single generation call.)
+//
+// Single-panel case returns immediately — no batching math needed at all
+// when there's only one screenshot.
 function pickCanvasSize(panelCount: number): { width: number; height: number } {
   const height = 1536; // fixed portrait height, matches phone aspect ratio
+
+  if (panelCount === 1) {
+    return { width: 1024, height }; // single screenshot, no batching math needed
+  }
+
   const perPanelWidth = 1024; // gives each panel a ~2:3 phone-like ratio
 
   // Round width up to nearest multiple of 16, per API requirement.
@@ -50,15 +62,21 @@ function pickCanvasSize(panelCount: number): { width: number; height: number } {
   const maxWidthForRatio = height * 3;
   width = Math.min(width, maxWidthForRatio);
 
-  // Enforce the documented max resolution.
+  // Enforce the documented max resolution. This is what causes the slight
+  // narrowing at 4+ panels noted in the table above.
   width = Math.min(width, 3840);
 
   return { width, height };
 }
 
 // Splits one combined PNG buffer into `panelCount` equal-width vertical
-// slices. Assumes the model laid panels out left-to-right at equal widths,
-// which is what our prompt explicitly asks for — if the model occasionally
+// slices. For a single screenshot, this is a no-op — there is nothing to
+// crop, since the model only ever drew one panel and the canvas was sized
+// for exactly one panel (see pickCanvasSize above). Cropping logic only
+// runs for 2+ panels.
+//
+// Assumes the model laid panels out left-to-right at equal widths, which
+// is what our prompt explicitly asks for — if the model occasionally
 // ignores that and draws uneven panel widths, slices may cut into adjacent
 // panels. There's no way to detect panel boundaries from pixels alone
 // without doing actual edge/content detection, so this is a "trust the
@@ -69,6 +87,8 @@ async function splitIntoPanels(
   panelCount: number,
 ): Promise<Buffer[]> {
   if (panelCount === 1) {
+    // No cropping needed at all — single screenshot, single panel,
+    // the generated image IS the final output as-is.
     return [pngBuffer];
   }
 
@@ -146,24 +166,28 @@ in the correct position? If not, fix it before returning the result.`}
 === END PANEL COUNT ===
 
 === STYLE vs. SUBJECT MATTER — DO NOT CONFUSE THESE ===
-The REFERENCE image teaches you a STYLE: line weight, shading technique,
-color palette, roundness, typography, and overall illustration mood. It is
-NOT a library of assets to copy.
+The REFERENCE image teaches you an ILLUSTRATION STYLE: line weight, shading
+technique, roundness, typography, and overall illustration mood. It is NOT
+a library of assets to copy, and it is NOT your color source (colors come
+from the RAW SCREENSHOT's own app branding instead — see the COLOR SOURCE
+rule below). The reference's own colors should be ignored entirely.
 
 Do NOT reuse the REFERENCE image's specific mascot, character, animal,
 plant, or any named decorative prop (for example: if the REFERENCE shows a
 cactus character, a wooden sign, or a trophy icon, do NOT draw that same
 cactus, sign, or trophy in your output). Copying the reference's specific
-character or props is WRONG even if the colors and line style match.
+character or props is WRONG even if the line style matches.
 
 Instead, INVENT a new, original character and new decorative props that:
-- Match the REFERENCE's illustration STYLE (rounded shapes, color palette,
-  shading, line weight, typography) — yes, copy the style.
+- Match the REFERENCE's illustration STYLE (rounded shapes, shading, line
+  weight, typography) — yes, copy the style. Do NOT match its colors.
 - Are thematically relevant to the app shown in the RAW SCREENSHOT(s)
   instead of the reference's subject (for example, for a cricket scoring
   app, consider a cricket bat, ball, trophy, or a friendly sports-themed
   mascot — not a cactus, not a habit-tracker plant, not anything specific
   to what the reference happened to depict).
+- Are colored using the app-derived palette described in the COLOR SOURCE
+  rule below, not the reference's colors.
 - Stay completely original — do not trace, copy, or closely imitate the
   reference's specific drawn subject in any panel.
 === END STYLE vs. SUBJECT MATTER ===
@@ -178,17 +202,69 @@ Hard rules:
    copied from the REFERENCE image) and keep its face, outfit, and color
    IDENTICAL across all ${panelWord} in this set. Do not let it drift
    panel-to-panel, and do not let it resemble the REFERENCE's own character.
-3. Maintain identical background color treatment, font family/weight for
-   headlines, and decorative motifs across all ${panelWord}, matching the
-   REFERENCE image's STYLE only (palette, shading, typography) — never its
-   specific subject matter, panel count, or layout.
+3. COLOR SOURCE: do NOT copy the REFERENCE image's color palette. Instead,
+   derive the color palette from the RAW SCREENSHOT(s) themselves — look at
+   the app's own branding (primary buttons, header bars, accent colors,
+   highlighted text, icons) visible in the screenshot(s) and use THOSE
+   colors for the panel background, headline text, and decorative motifs.
+   If multiple screenshots show different accent colors, pick the most
+   frequently recurring one as the primary palette, and keep that SAME
+   app-derived palette consistent across all ${panelWord} in this set
+   (panels may still vary in background tint/shade for visual variety, but
+   should stay within the same color family derived from the app).
+   Maintain identical font family/weight for headlines and decorative
+   motif style across all ${panelWord}, matching the REFERENCE image's
+   TYPOGRAPHY and illustration STYLE only — never its color palette, its
+   specific subject matter (mascot/props), or its overall panel COUNT.
+   (Note: you SHOULD copy the REFERENCE's spatial composition *within* a
+   single panel — see the LAYOUT / COMPOSITION section below. The "don't
+   copy layout" rule here refers only to panel count/grid structure, not
+   in-panel positioning.)
 4. Each panel must include a short headline (max 6 words) and one supporting
    line of subtext (max 10 words) above the phone mockup.
 5. Render all text with perfect spelling, high contrast, and no distortion.
 6. Output panels left-to-right in the same order as the input screenshots.
 7. Do not add watermarks, logos, or placeholder text.
 8. Do not add a second, third, or fourth phone frame beyond what is required
-   to display the ${panelCountSpelled} provided screenshot(s).`;
+   to display the ${panelCountSpelled} provided screenshot(s).
+
+=== LAYOUT / COMPOSITION — MATCH THE REFERENCE'S SPATIAL STRUCTURE ===
+Copy the REFERENCE image's COMPOSITION exactly — where things sit on the
+canvas (phone size/position, text placement, character placement) — NOT
+its colors. Colors come from the RAW SCREENSHOT's app branding, per the
+COLOR SOURCE rule above. Composition and color are independent: copy the
+former from the REFERENCE, derive the latter from the RAW SCREENSHOT(s).
+
+Phone mockup:
+- The phone mockup must be LARGE and DOMINANT — it should occupy the
+  majority of the panel's vertical space (roughly 65-75% of panel height),
+  matching the REFERENCE image's proportions. Do not shrink it to make room
+  for decorative elements.
+- Center the phone mockup horizontally within the panel, or position it
+  exactly where the REFERENCE places its phone mockup relative to the
+  panel's width. Do not push the phone to one side with large empty space
+  on the other side unless the REFERENCE image does the same.
+- The phone should appear anchored toward the bottom of the panel, with the
+  headline/subtext text block above it — matching the REFERENCE's vertical
+  rhythm of [headline] → [subtext] → [phone mockup], top to bottom.
+
+Character placement:
+- The character should be positioned beside or slightly overlapping the
+  phone mockup's edge (as in the REFERENCE), not floating in empty space
+  separate from the phone. The character and phone should read as one
+  cohesive grouping, not two disconnected elements.
+
+Text block:
+- Headline and subtext must be horizontally centered (or left-aligned,
+  matching whichever the REFERENCE uses) with consistent, even letter
+  spacing and clean alignment between the headline and the subtext line
+  directly below it.
+- Leave clear visual breathing room between the text block and the top of
+  the phone mockup — do not let them crowd each other.
+- Headline font size should be large and bold enough to dominate the top of
+  the panel, matching the REFERENCE's type scale, not a smaller or
+  thinner-weight rendering.
+=== END LAYOUT / COMPOSITION ===`;
 
   return stylePrompt
     ? `${systemPrompt}\n\nAdditional style direction from the user: ${stylePrompt}`
